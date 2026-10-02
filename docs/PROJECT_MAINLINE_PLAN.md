@@ -1,4 +1,4 @@
-# Web Audio Normalizer — Project Mainline Plan
+# WebAudioBalance — Project Mainline Plan
 
 > Status: **FROZEN BASELINE**
 >
@@ -24,7 +24,7 @@ The initial proposal remains a historical design record, not the implementation 
 
 ## 2. Product definition
 
-Web Audio Normalizer is a desktop Chromium browser extension that allows users to actively place browser tabs under audio management and then:
+WebAudioBalance is a desktop Chromium browser extension that allows users to actively place browser tabs under audio management and then:
 
 1. normalize each managed tab independently toward a shared perceptual loudness reference;
 2. apply a user-controlled per-tab manual gain offset on top of automatic normalization;

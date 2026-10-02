@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebAudioBalance P0 PoC</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="header">
+    <div class="brand">
+      <span class="icon">🔊</span>
+      <strong>WebAudioBalance</strong>
+      <span class="badge">P0 Feasibility PoC</span>
+    </div>
+    <div class="env-info" id="envInfo">Detecting browser...</div>
+  </header>
+
+  <main class="content">
+    <!-- Target Tab Card -->
+    <section class="card">
+      <div class="card-title">Current Tab Information</div>
+      <div class="tab-meta" id="tabMeta">
+        <div><strong>Tab ID:</strong> <span id="currentTabId">-</span></div>
+        <div><strong>Title:</strong> <span id="currentTabTitle" class="truncate">-</span></div>
+        <div><strong>Audible:</strong> <span id="currentTabAudible" class="status-tag">-</span></div>
+      </div>
+      <div class="btn-group">
+        <button id="btnEnableCapture" class="btn btn-primary">Enable Capture for This Tab</button>
+        <button id="btnStopCapture" class="btn btn-danger" disabled>Stop Capture</button>
+      </div>
+    </section>
+
+    <!-- Test Gain Controls -->
+    <section class="card">
+      <div class="card-title">Deterministic Test Gain (Current Tab)</div>
+      <div class="gain-buttons">
+        <button class="btn btn-secondary gain-preset" data-gain="-6">-6 dB (0.5x)</button>
+        <button class="btn btn-secondary gain-preset" data-gain="0">0 dB (1.0x)</button>
+        <button class="btn btn-secondary gain-preset" data-gain="6">+6 dB (2.0x)</button>
+      </div>
+      <div class="slider-row">
+        <input type="range" id="gainSlider" min="-12" max="12" step="1" value="0">
+        <span id="gainValueDisplay">0 dB</span>
+      </div>
+    </section>
+
+    <!-- Active Managed Streams -->
+    <section class="card">
+      <div class="card-title">
+        <span>Active Managed Tab Sessions</span>
+        <button id="btnRefreshState" class="btn btn-sm">Refresh</button>
+      </div>
+      <div id="activeStreamsContainer" class="streams-container">
+        <div class="empty-hint">No active capture sessions</div>
+      </div>
+    </section>
+
+    <!-- Live Diagnostics & Logs -->
+    <section class="card">
+      <div class="card-title">
+        <span>Diagnostics & Observability</span>
+        <div>
+          <button id="btnCopyReport" class="btn btn-sm">Copy Report</button>
+          <button id="btnClearLogs" class="btn btn-sm">Clear</button>
+        </div>
+      </div>
+      <div id="logViewer" class="log-viewer"></div>
+    </section>
+  </main>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

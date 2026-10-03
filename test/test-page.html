@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebAudioBalance P0 Test Fixture</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 24px;
+      max-width: 600px;
+      margin: 0 auto;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    h1 { font-size: 18px; margin-bottom: 12px; }
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .btn {
+      padding: 8px 14px;
+      font-size: 13px;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      background: #f1f5f9;
+      cursor: pointer;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+    .btn:hover { background: #e2e8f0; }
+    .btn.active { background: #2563eb; color: #fff; border-color: #1d4ed8; }
+    .status { font-family: monospace; font-size: 12px; color: #475569; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>WebAudioBalance P0 Test Signal Fixture</h1>
+
+  <div class="card">
+    <h3>1. Web Audio Oscillator (Continuous Tone)</h3>
+    <p style="font-size: 13px; color: #64748b; margin: 6px 0 12px;">Generates a continuous 440 Hz Sine tone at -12 dBFS to test capture, gain and metering.</p>
+    <button id="btnToneToggle" class="btn">Start 440Hz Sine Tone</button>
+    <button id="btnToneFreq" class="btn" disabled>Toggle 880Hz</button>
+    <div id="toneStatus" class="status">Oscillator: STOPPED</div>
+  </div>
+
+  <div class="card">
+    <h3>2. Synthesized HTML5 Audio Player</h3>
+    <p style="font-size: 13px; color: #64748b; margin: 6px 0 12px;">Standard &lt;audio controls&gt; element playing an auto-generated audio loop to test HTML5 media capture.</p>
+    <audio id="audioEl" controls loop style="width: 100%;"></audio>
+    <div id="audioStatus" class="status">HTML5 Audio: PAUSED</div>
+  </div>
+
+  <script>
+    // Web Audio Oscillator
+    let ctx = null;
+    let osc = null;
+    let gain = null;
+    let isPlaying = false;
+    let currentFreq = 440;
+
+    const btnToneToggle = document.getElementById('btnToneToggle');
+    const btnToneFreq = document.getElementById('btnToneFreq');
+    const toneStatus = document.getElementById('toneStatus');
+
+    btnToneToggle.addEventListener('click', () => {
+      if (!isPlaying) {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        osc = ctx.createOscillator();
+        gain = ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.value = currentFreq;
+        // set -12 dBFS (linear amplitude 0.25)
+        gain.gain.value = 0.25;
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+
+        isPlaying = true;
+        btnToneToggle.textContent = 'Stop Sine Tone';
+        btnToneToggle.classList.add('active');
+        btnToneFreq.disabled = false;
+        toneStatus.textContent = `Oscillator: RUNNING (${currentFreq} Hz @ ~ -12 dBFS)`;
+      } else {
+        if (osc) {
+          osc.stop();
+          osc.disconnect();
+        }
+        if (ctx) ctx.close();
+        isPlaying = false;
+        btnToneToggle.textContent = 'Start 440Hz Sine Tone';
+        btnToneToggle.classList.remove('active');
+        btnToneFreq.disabled = true;
+        toneStatus.textContent = 'Oscillator: STOPPED';
+      }
+    });
+
+    btnToneFreq.addEventListener('click', () => {
+      if (!osc) return;
+      currentFreq = currentFreq === 440 ? 880 : 440;
+      osc.frequency.setValueAtTime(currentFreq, ctx.currentTime);
+      btnToneFreq.textContent = `Toggle ${currentFreq === 440 ? 880 : 440}Hz`;
+      toneStatus.textContent = `Oscillator: RUNNING (${currentFreq} Hz @ ~ -12 dBFS)`;
+    });
+
+    // Synthesized HTML5 Audio buffer via WAV Data URL
+    function generateWavDataUrl(durationSec = 2, freq = 300) {
+      const sampleRate = 44100;
+      const numSamples = sampleRate * durationSec;
+      const buffer = new ArrayBuffer(44 + numSamples * 2);
+      const view = new DataView(buffer);
+
+      function writeString(offset, string) {
+        for (let i = 0; i < string.length; i++) {
+          view.setUint8(offset + i, string.charCodeAt(i));
+        }
+      }
+
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + numSamples * 2, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true); // PCM
+      view.setUint16(22, 1, true); // Mono
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, 'data');
+      view.setUint32(40, numSamples * 2, true);
+
+      // Write sine wave samples
+      for (let i = 0; i < numSamples; i++) {
+        const t = i / sampleRate;
+        const s = Math.sin(2 * Math.PI * freq * t) * 0.25; // -12 dBFS
+        view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      }
+
+      const blob = new Blob([buffer], { type: 'audio/wav' });
+      return URL.createObjectURL(blob);
+    }
+
+    const audioEl = document.getElementById('audioEl');
+    const audioStatus = document.getElementById('audioStatus');
+    audioEl.src = generateWavDataUrl(3, 330);
+
+    audioEl.addEventListener('play', () => {
+      audioStatus.textContent = 'HTML5 Audio: PLAYING (330 Hz synthesized WAV)';
+    });
+    audioEl.addEventListener('pause', () => {
+      audioStatus.textContent = 'HTML5 Audio: PAUSED';
+    });
+  </script>
+</body>
+</html>

@@ -1,6 +1,8 @@
 # R2 — Runtime & State Reliability Mainline Plan
 
-> Status: **FROZEN PLAN — IMPLEMENTATION BLOCKED UNTIL R1 GO**  
+> Implementation Specification: `docs/planning/R2_RUNTIME_STATE_RELIABILITY_IMPLEMENTATION_SPEC.md` — **FROZEN**  
+
+> Status: **FROZEN PLAN + IMPLEMENTATION SPEC — CODE BLOCKED UNTIL FINAL R1 GO**  
 > Frozen Date: **2026-10-04**  
 > Parent baseline: `docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`  
 > Dependency: corrected R1 closeout must be GO/FROZEN before R2 implementation begins.

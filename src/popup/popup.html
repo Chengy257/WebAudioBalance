@@ -22,20 +22,26 @@
       </div>
     </header>
 
-    <!-- Master Controls Section -->
+    <!-- Inline Error Notification Surface (Section 11) -->
+    <div id="errorBanner" class="error-banner hidden" role="alert">
+      <span id="errorMessage" class="error-text"></span>
+      <button id="btnDismissError" class="btn-close" aria-label="Dismiss error">&times;</button>
+    </div>
+
+    <!-- Master Controls Section (Section 4) -->
     <section class="master-card" aria-label="Master Controls">
       <div class="master-row">
         <div class="master-label-group">
-          <span class="master-label">Global Auto Balance</span>
-          <span class="master-desc">Keep all managed tabs at a consistent volume</span>
+          <span class="master-label">Auto Balance</span>
+          <span class="master-desc">Applies to enabled tabs</span>
         </div>
-        <button id="btnGlobalAuto" class="switch" role="switch" aria-checked="true" aria-label="Toggle global auto balance">
+        <button id="btnGlobalAuto" class="switch" role="switch" aria-checked="true" aria-label="Toggle auto balance">
           <span class="switch-handle"></span>
         </button>
       </div>
 
       <div class="level-selector-group">
-        <label class="section-sublabel" id="levelGroupLabel">Listening Level Target</label>
+        <label class="section-sublabel" id="levelGroupLabel">Listening Level</label>
         <div class="segmented-control" role="radiogroup" aria-labelledby="levelGroupLabel">
           <button class="segment-btn" data-level="quiet" role="radio" aria-checked="false">
             <span class="segment-title">Quiet</span>
@@ -53,34 +59,34 @@
       </div>
     </section>
 
-    <!-- Active Managed Tabs Section -->
-    <section class="section" aria-label="Managed Tabs">
+    <!-- Enabled Tabs Section (Section 5) -->
+    <section class="section" aria-label="Enabled Tabs">
       <div class="section-header">
-        <h2 class="section-title">Managed Tabs</h2>
+        <h2 class="section-title">Enabled Tabs</h2>
         <span id="managedCountBadge" class="count-badge">0</span>
       </div>
       <div id="managedTabsContainer" class="tabs-deck">
         <div class="empty-state">
-          <p>No tabs currently under management.</p>
+          <p>No tabs currently balanced.</p>
           <p class="empty-hint">Select a detected tab below or right-click any page to balance its audio.</p>
         </div>
       </div>
     </section>
 
-    <!-- Detected Audible Tabs Section -->
-    <section class="section" aria-label="Detected Audio Tabs">
+    <!-- Other Audio Tabs Section (Section 8) -->
+    <section class="section" aria-label="Other Audio Tabs">
       <div class="section-header">
-        <h2 class="section-title">Detected Audio Tabs</h2>
+        <h2 class="section-title">Other Audio Tabs</h2>
         <span id="detectedCountBadge" class="count-badge">0</span>
       </div>
       <div id="detectedTabsContainer" class="tabs-deck">
         <div class="empty-state">
-          <p>No other audible tabs found.</p>
+          <p>No other audio tabs found.</p>
         </div>
       </div>
     </section>
 
-    <!-- Collapsible Advanced Diagnostics Drawer -->
+    <!-- Collapsible Advanced Diagnostics Drawer (Section 12) -->
     <details id="diagnosticsDrawer" class="diagnostics-drawer">
       <summary class="diagnostics-summary">Advanced Diagnostics & Engineering</summary>
       <div class="diagnostics-content">
@@ -91,6 +97,7 @@
             <button id="btnClearDiagLogs" class="btn btn-sm">Clear</button>
           </div>
         </div>
+        <div id="diagnosticsMetrics" class="diag-metrics-view"></div>
         <div id="diagnosticsLog" class="diag-log-view"></div>
       </div>
     </details>

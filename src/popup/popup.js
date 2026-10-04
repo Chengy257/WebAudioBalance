@@ -5,7 +5,7 @@
 
 import { MessageTargets, MessageTypes, createMessage } from '../shared/messages.js';
 import { StructuredLogger, getBrowserInfo, getStoredLogs, clearStoredLogs } from '../shared/logger.js';
-import { ListeningLevels, getListeningLevelByTarget, presentTabStatus, checkUrlSupport } from './state-presenter.js';
+import { ListeningLevels, getListeningLevelByTarget, presentTabStatus, formatRelativeLevel, checkUrlSupport } from './state-presenter.js';
 
 const logger = new StructuredLogger('ProductUI');
 
@@ -25,8 +25,13 @@ const btnRefresh = document.getElementById('btnRefresh');
 const btnToggleDiagnostics = document.getElementById('btnToggleDiagnostics');
 const diagnosticsDrawer = document.getElementById('diagnosticsDrawer');
 const diagnosticsLog = document.getElementById('diagnosticsLog');
+const diagnosticsMetrics = document.getElementById('diagnosticsMetrics');
 const btnCopyDiagReport = document.getElementById('btnCopyDiagReport');
 const btnClearDiagLogs = document.getElementById('btnClearDiagLogs');
+
+const errorBanner = document.getElementById('errorBanner');
+const errorMessage = document.getElementById('errorMessage');
+const btnDismissError = document.getElementById('btnDismissError');
 
 const btnGlobalAuto = document.getElementById('btnGlobalAuto');
 const levelButtons = document.querySelectorAll('.segment-btn');
@@ -36,6 +41,19 @@ const managedTabsContainer = document.getElementById('managedTabsContainer');
 
 const detectedCountBadge = document.getElementById('detectedCountBadge');
 const detectedTabsContainer = document.getElementById('detectedTabsContainer');
+
+function showError(msg) {
+  if (errorBanner && errorMessage) {
+    errorMessage.textContent = msg;
+    errorBanner.classList.remove('hidden');
+  }
+}
+
+function hideError() {
+  if (errorBanner) {
+    errorBanner.classList.add('hidden');
+  }
+}
 
 /**
  * Initialize Popup
@@ -65,8 +83,19 @@ function setupEventListeners() {
   btnToggleDiagnostics.addEventListener('click', () => {
     if (diagnosticsDrawer) {
       diagnosticsDrawer.open = !diagnosticsDrawer.open;
+      if (diagnosticsDrawer.open) renderDiagnosticsMetrics();
     }
   });
+
+  if (diagnosticsDrawer) {
+    diagnosticsDrawer.addEventListener('toggle', () => {
+      if (diagnosticsDrawer.open) renderDiagnosticsMetrics();
+    });
+  }
+
+  if (btnDismissError) {
+    btnDismissError.addEventListener('click', hideError);
+  }
 
   btnCopyDiagReport.addEventListener('click', handleCopyDiagnosticsReport);
   btnClearDiagLogs.addEventListener('click', handleClearDiagnosticsLogs);
@@ -179,6 +208,7 @@ function renderUI() {
   renderMasterControls();
   renderManagedTabs();
   renderDetectedTabs();
+  renderDiagnosticsMetrics();
 }
 
 /**
@@ -231,9 +261,8 @@ function createManagedTabCard(tab) {
   card.id = `managed-card-${tab.tabId}`;
 
   const status = presentTabStatus(tab);
-  const formattedManual = (tab.manualOffsetDb >= 0 ? '+' : '') + tab.manualOffsetDb.toFixed(1) + ' dB';
-  const formattedAuto = (tab.autoGainDb >= 0 ? '+' : '') + tab.autoGainDb.toFixed(1) + ' dB';
-  const formattedTotal = (tab.effectiveGainDb >= 0 ? '+' : '') + tab.effectiveGainDb.toFixed(1) + ' dB';
+  const offsetVal = typeof tab.manualOffsetDb === 'number' ? tab.manualOffsetDb : (tab.relativeOffsetDb ?? 0.0);
+  const formattedRelative = formatRelativeLevel(offsetVal);
 
   const faviconHtml = tab.favIconUrl
     ? `<img class="tab-favicon" src="${escapeHtml(tab.favIconUrl)}" alt="" onerror="this.replaceWith(document.createTextNode('🔊'))" />`
@@ -254,10 +283,10 @@ function createManagedTabCard(tab) {
     <div class="tab-controls-block">
       <div class="slider-group">
         <div class="slider-header">
-          <label class="slider-label" for="slider-${tab.tabId}">Volume Adjustment</label>
-          <span class="gain-val-chip" id="val-${tab.tabId}">${formattedManual}</span>
+          <label class="slider-label" for="slider-${tab.tabId}">Relative Level</label>
+          <span class="gain-val-chip" id="val-${tab.tabId}">${formattedRelative}</span>
         </div>
-        <div class="slider-container" title="Double click to reset to 0 dB">
+        <div class="slider-container" title="Double click to reset to 0 dB (Normal)">
           <input
             type="range"
             class="volume-slider"
@@ -265,12 +294,17 @@ function createManagedTabCard(tab) {
             min="-12"
             max="12"
             step="0.5"
-            value="${tab.manualOffsetDb}"
-            aria-label="Volume adjustment for ${escapeHtml(tab.title)}"
+            value="${offsetVal}"
+            aria-label="Relative level for ${escapeHtml(tab.title)}"
             aria-valuemin="-12"
             aria-valuemax="12"
-            aria-valuenow="${tab.manualOffsetDb}"
+            aria-valuenow="${offsetVal}"
           />
+        </div>
+        <div class="relative-level-legend">
+          <span>Quieter</span>
+          <span>Normal</span>
+          <span>Louder</span>
         </div>
       </div>
 
@@ -287,11 +321,6 @@ function createManagedTabCard(tab) {
           </button>
           <span>Auto Balance</span>
         </label>
-
-        <div class="tab-gain-chips" title="Auto: ${formattedAuto} | Manual: ${formattedManual} | Effective Total: ${formattedTotal}">
-          <span class="gain-chip-item">Auto ${formattedAuto}</span>
-          <span class="gain-chip-item">Tot ${formattedTotal}</span>
-        </div>
 
         <button class="btn btn-danger-outline" id="btn-release-${tab.tabId}" title="Stop balancing and return audio control to browser">
           Release
@@ -311,15 +340,15 @@ function createManagedTabCard(tab) {
 
   slider.addEventListener('input', (e) => {
     const val = Number(e.target.value);
-    valChip.textContent = (val >= 0 ? '+' : '') + val.toFixed(1) + ' dB';
+    valChip.textContent = formatRelativeLevel(val);
     slider.setAttribute('aria-valuenow', String(val));
     setTabManualOffset(tab.tabId, val);
   });
 
-  // Double click resets to 0.0 dB
+  // Double click resets to 0.0 dB (Normal)
   slider.addEventListener('dblclick', () => {
     slider.value = '0';
-    valChip.textContent = '0.0 dB';
+    valChip.textContent = formatRelativeLevel(0);
     slider.setAttribute('aria-valuenow', '0');
     setTabManualOffset(tab.tabId, 0);
   });
@@ -439,14 +468,15 @@ async function handleStartCapture(tabId) {
 
     if (response && response.success) {
       logger.info('Start capture successfully processed', { tabId });
+      hideError();
     } else {
       const errMsg = response?.error?.message || (typeof response?.error === 'string' ? response.error : 'Unknown error');
       logger.error('Start capture returned error', response);
-      alert(`Could not balance tab: ${errMsg}`);
+      showError(`Could not balance tab: ${errMsg}`);
     }
   } catch (err) {
     logger.error('handleStartCapture exception', { error: err.message });
-    alert(`Balance tab failed: ${err.message}`);
+    showError(`Balance tab failed: ${err.message}`);
   } finally {
     setTimeout(refreshAll, 300);
   }
@@ -596,6 +626,12 @@ function handleMetricsUpdate(metrics) {
     if (tab.audio) {
       Object.assign(tab.audio, metrics);
     }
+    if (tab.runtime) {
+      if (metrics.active !== undefined) tab.runtime.active = metrics.active;
+      if (metrics.isLimited !== undefined) tab.runtime.limited = metrics.isLimited;
+      if (metrics.limitReason !== undefined) tab.runtime.limitReason = metrics.limitReason;
+      if (metrics.captured !== undefined) tab.runtime.captured = metrics.captured;
+    }
 
     const card = document.getElementById(`managed-card-${metrics.tabId}`);
     if (card) {
@@ -608,32 +644,65 @@ function handleMetricsUpdate(metrics) {
         badge.title = status.tooltip;
       }
 
-      // Update gain chips
-      const chipsContainer = card.querySelector('.tab-gain-chips');
-      if (chipsContainer) {
-        const formattedManual = (tab.manualOffsetDb >= 0 ? '+' : '') + tab.manualOffsetDb.toFixed(1) + ' dB';
-        const formattedAuto = (tab.autoGainDb >= 0 ? '+' : '') + tab.autoGainDb.toFixed(1) + ' dB';
-        const formattedTotal = (tab.effectiveGainDb >= 0 ? '+' : '') + tab.effectiveGainDb.toFixed(1) + ' dB';
-        chipsContainer.innerHTML = `
-          <span class="gain-chip-item">Auto ${formattedAuto}</span>
-          <span class="gain-chip-item">Tot ${formattedTotal}</span>
-        `;
-        chipsContainer.title = `Auto: ${formattedAuto} | Manual: ${formattedManual} | Effective Total: ${formattedTotal}`;
-      }
-
       // Update slider if user is not actively dragging it
       if (activeDragTabId !== metrics.tabId) {
         const slider = card.querySelector(`#slider-${metrics.tabId}`);
         const valChip = card.querySelector(`#val-${metrics.tabId}`);
-        if (slider && Math.abs(Number(slider.value) - tab.manualOffsetDb) > 0.05) {
-          slider.value = String(tab.manualOffsetDb);
+        const currentOffset = typeof tab.relativeOffsetDb === 'number' ? tab.relativeOffsetDb : (tab.manualOffsetDb ?? 0.0);
+        if (slider && Math.abs(Number(slider.value) - currentOffset) > 0.05) {
+          slider.value = String(currentOffset);
           if (valChip) {
-            valChip.textContent = (tab.manualOffsetDb >= 0 ? '+' : '') + tab.manualOffsetDb.toFixed(1) + ' dB';
+            valChip.textContent = formatRelativeLevel(currentOffset);
           }
         }
       }
     }
   }
+
+  // Refresh live diagnostics metrics if drawer is open
+  renderDiagnosticsMetrics();
+}
+
+/**
+ * Render real-time canonical diagnostics metrics (Section 12)
+ */
+function renderDiagnosticsMetrics() {
+  if (!diagnosticsDrawer || !diagnosticsDrawer.open || !diagnosticsMetrics) return;
+  const managed = currentSnapshot.managedTabs || [];
+
+  if (managed.length === 0) {
+    diagnosticsMetrics.innerHTML = `
+      <div class="diag-metric-row">
+        <span class="diag-metric-label">Status</span>
+        <span class="diag-metric-val">No active audio engines</span>
+      </div>
+      <div class="diag-metric-row">
+        <span class="diag-metric-label">Product Revision</span>
+        <span class="diag-metric-val">r${currentSnapshot.revision || 0}</span>
+      </div>
+    `;
+    return;
+  }
+
+  let html = '';
+  for (const tab of managed) {
+    const audio = tab.audio || {};
+    const runtime = tab.runtime || {};
+    const offset = typeof tab.relativeOffsetDb === 'number' ? tab.relativeOffsetDb : (tab.manualOffsetDb ?? 0.0);
+
+    html += `
+      <div class="diag-metric-row"><span class="diag-metric-label">Tab ID</span><span class="diag-metric-val">${tab.tabId}</span></div>
+      <div class="diag-metric-row"><span class="diag-metric-label">Engine / AudioContext</span><span class="diag-metric-val">${runtime.engineState || 'IDLE'} / ${runtime.audioContextState || 'closed'}</span></div>
+      <div class="diag-metric-row"><span class="diag-metric-label">Active / Frozen / Limited</span><span class="diag-metric-val">${runtime.active} / ${runtime.frozen} / ${runtime.limited} (${runtime.limitReason || 'none'})</span></div>
+      <div class="diag-metric-row"><span class="diag-metric-label">Input LUFS (M / S)</span><span class="diag-metric-val">${(audio.inputMomentaryLufs ?? -100).toFixed(1)} / ${(audio.inputShortTermLufs ?? -100).toFixed(1)} LUFS</span></div>
+      <div class="diag-metric-row"><span class="diag-metric-label">Output LUFS (M / S)</span><span class="diag-metric-val">${(audio.outputMomentaryLufs ?? -100).toFixed(1)} / ${(audio.outputShortTermLufs ?? -100).toFixed(1)} LUFS</span></div>
+      <div class="diag-metric-row"><span class="diag-metric-label">Target / Target Error</span><span class="diag-metric-val">${(audio.effectiveTargetLufs ?? -18).toFixed(1)} LUFS / ${audio.outputTargetErrorLu !== null ? audio.outputTargetErrorLu + ' LU' : 'N/A'}</span></div>
+      <div class="diag-metric-row"><span class="diag-metric-label">Relative Offset / Applied Gain</span><span class="diag-metric-val">${offset.toFixed(1)} dB / ${(audio.appliedGainDb ?? 0).toFixed(1)} dB</span></div>
+      <div class="diag-metric-row"><span class="diag-metric-label">Revision / Sequence</span><span class="diag-metric-val">r${currentSnapshot.revision || 0} / #${audio.metricsSequence || 0}</span></div>
+      ${runtime.lastRuntimeError ? `<div class="diag-metric-row" style="color:var(--danger)"><span class="diag-metric-label">Last Error</span><span class="diag-metric-val">${runtime.lastRuntimeError.code || runtime.lastRuntimeError.message}</span></div>` : ''}
+    `;
+  }
+  diagnosticsMetrics.innerHTML = html;
 }
 
 /**
@@ -747,3 +816,17 @@ chrome.runtime.onMessage.addListener((message) => {
 
 // Run Init
 init();
+
+// Test harness inspection interface
+if (typeof window !== 'undefined') {
+  window.__wabTest = {
+    getSnapshot: () => currentSnapshot,
+    setSnapshot: (s) => { currentSnapshot = s; renderUI(); },
+    handleMetricsUpdate,
+    renderUI,
+    showError,
+    hideError,
+    checkUrlSupport,
+    presentTabStatus
+  };
+}

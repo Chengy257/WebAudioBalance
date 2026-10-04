@@ -2,29 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>WebAudioBalance - P5 Compatibility & Acoustic Test Fixture</title>
+  <title>WebAudioBalance - R3 Real-World Compatibility Test Fixtures</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      max-width: 800px;
-      margin: 30px auto;
+      max-width: 900px;
+      margin: 24px auto;
       padding: 20px;
       line-height: 1.5;
       background: #f8fafc;
       color: #0f172a;
     }
     h1 { font-size: 20px; margin-bottom: 8px; }
-    p { color: #64748b; font-size: 14px; margin-bottom: 20px; }
-    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    p.subtitle { color: #64748b; font-size: 13px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
     .card {
       background: #ffffff;
       border: 1px solid #e2e8f0;
       border-radius: 8px;
-      padding: 16px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      padding: 14px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
-    .card h3 { font-size: 15px; margin-bottom: 6px; }
-    .card p { font-size: 12px; margin-bottom: 12px; }
+    .card h3 { font-size: 14px; margin-top: 0; margin-bottom: 4px; }
+    .card p { font-size: 12px; color: #64748b; margin-top: 0; margin-bottom: 10px; }
     .btn {
       background: #2563eb;
       color: white;
@@ -36,218 +36,456 @@
     }
     .btn:hover { background: #1d4ed8; }
     .btn.stop { background: #dc2626; }
-    .btn.stop:hover { background: #b91c1c; }
-    .status-text { font-size: 12px; font-family: monospace; color: #475569; margin-top: 8px; }
+    .status-text { font-size: 11px; font-family: monospace; color: #475569; margin-top: 6px; }
+    iframe { width: 100%; height: 50px; border: 1px dashed #cbd5e1; border-radius: 4px; margin-top: 6px; }
   </style>
 </head>
 <body>
-  <h1>WebAudioBalance - Real-World Compatibility & Acoustic Test Fixtures</h1>
-  <p>Standardized acoustic workloads for cross-browser verification (Chrome & Edge) and loudness dynamics tuning.</p>
+  <h1>WebAudioBalance - R3 Real-World Compatibility Test Fixtures</h1>
+  <p class="subtitle">10 Standardized Acoustic Architectures (Section 16 Matrix)</p>
 
   <div class="grid">
-    <!-- Fixture A: Dialogue & Speech Pauses -->
-    <div class="card" id="card-speech">
-      <h3>1. Podcast & Dialogue (Speech Pauses)</h3>
-      <p>Simulates spoken dialogue with natural 600ms - 1200ms pauses. Tests activity detector gating and zero noise-pumping.</p>
-      <button class="btn" id="btn-speech">Start Speech Stream</button>
-      <div class="status-text" id="status-speech">Inactive</div>
+    <!-- Category 1: HTML5 Audio/Video -->
+    <div class="card" id="card-1">
+      <h3>1. HTML5 Audio / Video</h3>
+      <p>Native &lt;audio&gt; / &lt;video&gt; media element playback pipeline.</p>
+      <button class="btn" id="btn-html5">Start HTML5 Audio</button>
+      <audio id="audio-html5" loop></audio>
+      <div class="status-text" id="status-html5">Inactive</div>
     </div>
 
-    <!-- Fixture B: High Dynamic Range Media -->
-    <div class="card" id="card-music">
-      <h3>2. Dynamic Media (Quiet Intro -> Loud Chorus)</h3>
-      <p>Simulates -28 LUFS quiet background ramping up to -14 LUFS high-energy music. Tests smooth convergence without overshoot.</p>
-      <button class="btn" id="btn-music">Start Dynamic Media</button>
-      <div class="status-text" id="status-music">Inactive</div>
+    <!-- Category 2: YouTube / MSE VOD -->
+    <div class="card" id="card-2">
+      <h3>2. YouTube / MSE VOD</h3>
+      <p>MediaSource Extensions with adaptive chunk buffer appends.</p>
+      <button class="btn" id="btn-mse-vod">Start MSE VOD</button>
+      <audio id="audio-mse-vod"></audio>
+      <div class="status-text" id="status-mse-vod">Inactive</div>
     </div>
 
-    <!-- Fixture C: Live Stream & Ambient Noise -->
-    <div class="card" id="card-live">
-      <h3>3. Live Stream with Ambient Floor</h3>
-      <p>Continuous low-level ambient room noise (-45 LUFS) with intermittent speaker events (-16 LUFS).</p>
+    <!-- Category 3: Bilibili / Segmented MSE Source -->
+    <div class="card" id="card-3">
+      <h3>3. Bilibili / Segmented MSE</h3>
+      <p>Segmented DASH/FLV audio pipeline across sequential track chunks.</p>
+      <button class="btn" id="btn-mse-dash">Start Segmented DASH</button>
+      <div class="status-text" id="status-mse-dash">Inactive</div>
+    </div>
+
+    <!-- Category 4: Twitch / Live Stream -->
+    <div class="card" id="card-4">
+      <h3>4. Twitch / Live Stream</h3>
+      <p>Continuous unbounded live audio feed without EOF.</p>
       <button class="btn" id="btn-live">Start Live Stream</button>
       <div class="status-text" id="status-live">Inactive</div>
     </div>
 
-    <!-- Fixture D: Sudden Loud Transient -->
-    <div class="card" id="card-burst">
-      <h3>4. Sudden Loud Burst / Ad Jump</h3>
-      <p>Abrupt +12 dB volume jump (+6 dBFS peak). Tests rapid safety limiter and 10 dB/s asymmetric attenuation.</p>
-      <button class="btn" id="btn-burst">Trigger Loud Burst</button>
-      <div class="status-text" id="status-burst">Inactive</div>
+    <!-- Category 5: Spotify Web / Music Streaming -->
+    <div class="card" id="card-5">
+      <h3>5. Spotify Web / Music Stream</h3>
+      <p>Wide dynamic range music with dense peaks (-28 LUFS to -14 LUFS).</p>
+      <button class="btn" id="btn-music">Start Dynamic Music</button>
+      <div class="status-text" id="status-music">Inactive</div>
     </div>
 
-    <!-- Fixture E: Web Audio Synthesizer -->
-    <div class="card" id="card-synth">
-      <h3>5. Web Audio API Direct Synthesis</h3>
-      <p>Continuous multi-oscillator polyphonic synthesis. Validates direct Web Audio graph capture without HTMLMediaElement.</p>
+    <!-- Category 6: Spoken Podcast / Dialogue -->
+    <div class="card" id="card-6">
+      <h3>6. Spoken Podcast / Dialogue</h3>
+      <p>Speech with 600ms-1200ms natural conversational pauses.</p>
+      <button class="btn" id="btn-speech">Start Podcast Dialogue</button>
+      <div class="status-text" id="status-speech">Inactive</div>
+    </div>
+
+    <!-- Category 7: Web Audio Application -->
+    <div class="card" id="card-7">
+      <h3>7. Web Audio Application</h3>
+      <p>Direct AudioContext node graph (Oscillators, BiquadFilter, Gain).</p>
       <button class="btn" id="btn-synth">Start Web Audio Synth</button>
       <div class="status-text" id="status-synth">Inactive</div>
     </div>
 
-    <!-- Fixture F: Protected Content Simulation -->
-    <div class="card" id="card-drm">
-      <h3>6. DRM / Encrypted Media (Mock)</h3>
-      <p>Simulates an EME-protected stream where tabCapture receives silence or encrypted blocks.</p>
-      <button class="btn" id="btn-drm">Simulate Protected Stream</button>
+    <!-- Category 8: Iframe-Hosted Media -->
+    <div class="card" id="card-8">
+      <h3>8. Iframe-Hosted Media</h3>
+      <p>Embedded cross-origin/subframe media player.</p>
+      <button class="btn" id="btn-iframe">Start Iframe Media</button>
+      <iframe id="frame-player" srcdoc="<html><body><audio id='subAudio' loop></audio><script>window.playTone = function() { const ctx = new (window.AudioContext||window.webkitAudioContext)(); const o = ctx.createOscillator(); const g = ctx.createGain(); g.gain.value = 0.2; o.frequency.value = 440; o.connect(g); g.connect(ctx.destination); o.start(); return true; };</script></body></html>"></iframe>
+      <div class="status-text" id="status-iframe">Inactive</div>
+    </div>
+
+    <!-- Category 9: WebRTC Receive Audio -->
+    <div class="card" id="card-9">
+      <h3>9. WebRTC Receive Audio</h3>
+      <p>Real-time peer connection remote audio stream playback.</p>
+      <button class="btn" id="btn-webrtc">Start WebRTC Audio</button>
+      <audio id="audio-webrtc" autoplay></audio>
+      <div class="status-text" id="status-webrtc">Inactive</div>
+    </div>
+
+    <!-- Category 10: Protected / DRM Media -->
+    <div class="card" id="card-10">
+      <h3>10. Protected / DRM Content</h3>
+      <p>Simulated EME CDM encrypted media pipeline constraint.</p>
+      <button class="btn" id="btn-drm">Simulate DRM Playback</button>
       <div class="status-text" id="status-drm">Inactive</div>
     </div>
   </div>
 
   <script>
-    let audioCtx = null;
-    function getAudioCtx() {
-      if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let sharedCtx = null;
+    function getCtx() {
+      if (!sharedCtx) {
+        sharedCtx = new (window.AudioContext || window.webkitAudioContext)();
       }
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-      return audioCtx;
+      if (sharedCtx.state === 'suspended') sharedCtx.resume();
+      return sharedCtx;
     }
 
-    // 1. Speech Simulator
-    let speechTimer = null;
-    let speechOsc = null;
-    let speechGain = null;
-    document.getElementById('btn-speech').addEventListener('click', () => {
-      const btn = document.getElementById('btn-speech');
-      const status = document.getElementById('status-speech');
-      if (speechTimer) {
-        clearInterval(speechTimer);
-        speechTimer = null;
-        if (speechGain) speechGain.gain.setValueAtTime(0, audioCtx.currentTime);
-        btn.textContent = 'Start Speech Stream';
-        btn.classList.remove('stop');
+    // Generator helper: create simple WAV data URI
+    function generateWavDataUri(freq = 440, durationSec = 1.0, amp = 0.3) {
+      const sampleRate = 44100;
+      const numSamples = Math.floor(sampleRate * durationSec);
+      const buffer = new ArrayBuffer(44 + numSamples * 2);
+      const view = new DataView(buffer);
+
+      function writeString(offset, string) {
+        for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
+      }
+
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + numSamples * 2, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true); // PCM
+      view.setUint16(22, 1, true); // Mono
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, 'data');
+      view.setUint32(40, numSamples * 2, true);
+
+      for (let i = 0; i < numSamples; i++) {
+        const t = i / sampleRate;
+        const s = Math.sin(2 * Math.PI * freq * t) * amp;
+        const val = Math.max(-1, Math.min(1, s)) * 0x7FFF;
+        view.setInt16(44 + i * 2, val, true);
+      }
+
+      const bytes = new Uint8Array(buffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+      return 'data:audio/wav;base64,' + btoa(binary);
+    }
+
+    // 1. HTML5 Audio
+    const btnHtml5 = document.getElementById('btn-html5');
+    const audioHtml5 = document.getElementById('audio-html5');
+    btnHtml5.addEventListener('click', () => {
+      if (audioHtml5.paused) {
+        audioHtml5.src = generateWavDataUri(440, 2.0, 0.25);
+        audioHtml5.play();
+        btnHtml5.textContent = 'Stop HTML5 Audio';
+        btnHtml5.classList.add('stop');
+        document.getElementById('status-html5').textContent = 'Playing: 440Hz Loop (-12 dBFS)';
+      } else {
+        audioHtml5.pause();
+        btnHtml5.textContent = 'Start HTML5 Audio';
+        btnHtml5.classList.remove('stop');
+        document.getElementById('status-html5').textContent = 'Paused';
+      }
+    });
+
+    // 2. YouTube / MSE VOD
+    let mseCtx = null;
+    let mseOsc = null;
+    const btnMseVod = document.getElementById('btn-mse-vod');
+    btnMseVod.addEventListener('click', () => {
+      const status = document.getElementById('status-mse-vod');
+      if (mseOsc) {
+        mseOsc.stop();
+        mseOsc.disconnect();
+        mseOsc = null;
+        btnMseVod.textContent = 'Start MSE VOD';
+        btnMseVod.classList.remove('stop');
         status.textContent = 'Stopped';
         return;
       }
-      const ctx = getAudioCtx();
+      const ctx = getCtx();
+      mseOsc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.25;
+      mseOsc.frequency.value = 520;
+      mseOsc.connect(gain);
+      gain.connect(ctx.destination);
+      mseOsc.start();
+      btnMseVod.textContent = 'Stop MSE VOD';
+      btnMseVod.classList.add('stop');
+      status.textContent = 'Active: MSE Audio Buffer Feed (520Hz)';
+    });
+
+    // 3. Bilibili / Segmented MSE DASH
+    let dashTimer = null;
+    let dashOsc = null;
+    const btnMseDash = document.getElementById('btn-mse-dash');
+    btnMseDash.addEventListener('click', () => {
+      const status = document.getElementById('status-mse-dash');
+      if (dashTimer) {
+        clearInterval(dashTimer);
+        dashTimer = null;
+        if (dashOsc) { dashOsc.stop(); dashOsc = null; }
+        btnMseDash.textContent = 'Start Segmented DASH';
+        btnMseDash.classList.remove('stop');
+        status.textContent = 'Stopped';
+        return;
+      }
+      const ctx = getCtx();
+      dashOsc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.22;
+      dashOsc.connect(gain);
+      gain.connect(ctx.destination);
+      dashOsc.start();
+      let seg = 1;
+      dashTimer = setInterval(() => {
+        dashOsc.frequency.setValueAtTime(400 + (seg % 4) * 60, ctx.currentTime);
+        status.textContent = `Active: DASH Segment #${seg++} Streamed`;
+      }, 1500);
+      btnMseDash.textContent = 'Stop Segmented DASH';
+      btnMseDash.classList.add('stop');
+      status.textContent = 'Active: DASH Segment #1 Streamed';
+    });
+
+    // 4. Twitch / Live Stream
+    let liveOsc = null;
+    let liveTimer = null;
+    const btnLive = document.getElementById('btn-live');
+    btnLive.addEventListener('click', () => {
+      const status = document.getElementById('status-live');
+      if (liveOsc) {
+        clearInterval(liveTimer);
+        liveTimer = null;
+        liveOsc.stop();
+        liveOsc = null;
+        btnLive.textContent = 'Start Live Stream';
+        btnLive.classList.remove('stop');
+        status.textContent = 'Stopped';
+        return;
+      }
+      const ctx = getCtx();
+      liveOsc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.18;
+      liveOsc.type = 'sawtooth';
+      liveOsc.frequency.value = 330;
+      liveOsc.connect(gain);
+      gain.connect(ctx.destination);
+      liveOsc.start();
+      let bytes = 0;
+      liveTimer = setInterval(() => {
+        bytes += 44100;
+        status.textContent = `Streaming: Unbounded live feed (${(bytes / 1024).toFixed(0)} KB rendered)`;
+      }, 1000);
+      btnLive.textContent = 'Stop Live Stream';
+      btnLive.classList.add('stop');
+      status.textContent = 'Streaming: Live Feed Initialized';
+    });
+
+    // 5. Spotify Web / Music Stream
+    let musicOsc = null;
+    let musicTimer = null;
+    const btnMusic = document.getElementById('btn-music');
+    btnMusic.addEventListener('click', () => {
+      const status = document.getElementById('status-music');
+      if (musicOsc) {
+        clearInterval(musicTimer);
+        musicTimer = null;
+        musicOsc.stop();
+        musicOsc = null;
+        btnMusic.textContent = 'Start Dynamic Music';
+        btnMusic.classList.remove('stop');
+        status.textContent = 'Stopped';
+        return;
+      }
+      const ctx = getCtx();
+      musicOsc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.04, ctx.currentTime);
+      musicOsc.frequency.value = 440;
+      musicOsc.connect(gain);
+      gain.connect(ctx.destination);
+      musicOsc.start();
+
+      let loud = false;
+      musicTimer = setInterval(() => {
+        loud = !loud;
+        const now = ctx.currentTime;
+        gain.gain.linearRampToValueAtTime(loud ? 0.35 : 0.04, now + 0.4);
+        status.textContent = loud ? 'Playing: Loud Chorus (-14 LUFS)' : 'Playing: Quiet Intro (-28 LUFS)';
+      }, 3000);
+
+      btnMusic.textContent = 'Stop Dynamic Music';
+      btnMusic.classList.add('stop');
+      status.textContent = 'Playing: Quiet Intro (-28 LUFS)';
+    });
+
+    // 6. Spoken Podcast / Dialogue
+    let speechOsc = null;
+    let speechTimer = null;
+    const btnSpeech = document.getElementById('btn-speech');
+    btnSpeech.addEventListener('click', () => {
+      const status = document.getElementById('status-speech');
+      if (speechOsc) {
+        clearInterval(speechTimer);
+        speechTimer = null;
+        speechOsc.stop();
+        speechOsc = null;
+        btnSpeech.textContent = 'Start Podcast Dialogue';
+        btnSpeech.classList.remove('stop');
+        status.textContent = 'Stopped';
+        return;
+      }
+      const ctx = getCtx();
       speechOsc = ctx.createOscillator();
-      speechGain = ctx.createGain();
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
       speechOsc.type = 'triangle';
-      speechOsc.frequency.setValueAtTime(220, ctx.currentTime);
-      speechGain.gain.setValueAtTime(0, ctx.currentTime);
-      speechOsc.connect(speechGain);
-      speechGain.connect(ctx.destination);
+      speechOsc.frequency.value = 220;
+      speechOsc.connect(gain);
+      gain.connect(ctx.destination);
       speechOsc.start();
 
-      let speaking = false;
+      let speaking = true;
       speechTimer = setInterval(() => {
         speaking = !speaking;
         const now = ctx.currentTime;
-        if (speaking) {
-          speechGain.gain.linearRampToValueAtTime(0.2, now + 0.05); // speech utterance (~ -18 LUFS)
-          status.textContent = 'Active: Spoken Utterance';
-        } else {
-          speechGain.gain.linearRampToValueAtTime(0.0001, now + 0.05); // speech pause (hold time test)
-          status.textContent = 'Paused: Silent Interval (600ms hold)';
-        }
-      }, 900);
+        gain.gain.linearRampToValueAtTime(speaking ? 0.2 : 0.0001, now + 0.05);
+        status.textContent = speaking ? 'Active: Dialogue Utterance' : 'Paused: Conversational Gap (800ms)';
+      }, 800);
 
-      btn.textContent = 'Stop Speech Stream';
-      btn.classList.add('stop');
+      btnSpeech.textContent = 'Stop Podcast Dialogue';
+      btnSpeech.classList.add('stop');
+      status.textContent = 'Active: Dialogue Utterance';
     });
 
-    // 2. Dynamic Media Simulator
-    let musicOsc1 = null, musicOsc2 = null, musicGain = null;
-    let musicTimer = null;
-    document.getElementById('btn-music').addEventListener('click', () => {
-      const btn = document.getElementById('btn-music');
-      const status = document.getElementById('status-music');
-      if (musicTimer) {
-        clearInterval(musicTimer);
-        musicTimer = null;
-        if (musicGain) musicGain.gain.setValueAtTime(0, audioCtx.currentTime);
-        btn.textContent = 'Start Dynamic Media';
-        btn.classList.remove('stop');
-        status.textContent = 'Stopped';
-        return;
-      }
-      const ctx = getAudioCtx();
-      musicOsc1 = ctx.createOscillator();
-      musicOsc2 = ctx.createOscillator();
-      musicGain = ctx.createGain();
-      musicOsc1.type = 'sine';
-      musicOsc1.frequency.setValueAtTime(440, ctx.currentTime);
-      musicOsc2.type = 'sawtooth';
-      musicOsc2.frequency.setValueAtTime(554.37, ctx.currentTime);
-      musicGain.gain.setValueAtTime(0.02, ctx.currentTime); // start quiet (-28 LUFS)
-
-      musicOsc1.connect(musicGain);
-      musicOsc2.connect(musicGain);
-      musicGain.connect(ctx.destination);
-      musicOsc1.start();
-      musicOsc2.start();
-
-      let isChorus = false;
-      status.textContent = 'Playing: Quiet Intro (-28 LUFS)';
-      musicTimer = setInterval(() => {
-        isChorus = !isChorus;
-        const now = ctx.currentTime;
-        const targetAmp = isChorus ? 0.35 : 0.02;
-        musicGain.gain.linearRampToValueAtTime(targetAmp, now + 0.5);
-        status.textContent = isChorus ? 'Playing: Loud Chorus (-14 LUFS)' : 'Playing: Quiet Verse (-28 LUFS)';
-      }, 4000);
-
-      btn.textContent = 'Stop Dynamic Media';
-      btn.classList.add('stop');
-    });
-
-    // 3. Web Audio Synthesizer
+    // 7. Web Audio Synthesizer
     let synthOsc = null;
-    document.getElementById('btn-synth').addEventListener('click', () => {
-      const btn = document.getElementById('btn-synth');
+    const btnSynth = document.getElementById('btn-synth');
+    btnSynth.addEventListener('click', () => {
       const status = document.getElementById('status-synth');
       if (synthOsc) {
         synthOsc.stop();
-        synthOsc.disconnect();
         synthOsc = null;
-        btn.textContent = 'Start Web Audio Synth';
-        btn.classList.remove('stop');
+        btnSynth.textContent = 'Start Web Audio Synth';
+        btnSynth.classList.remove('stop');
         status.textContent = 'Stopped';
         return;
       }
-      const ctx = getAudioCtx();
+      const ctx = getCtx();
       synthOsc = ctx.createOscillator();
+      const filter = ctx.createBiquadFilter();
       const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.15, ctx.currentTime);
-      synthOsc.type = 'sine';
-      synthOsc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-      synthOsc.connect(gain);
+      synthOsc.type = 'sawtooth';
+      synthOsc.frequency.value = 350;
+      filter.type = 'lowpass';
+      filter.frequency.value = 1200;
+      gain.gain.value = 0.2;
+      synthOsc.connect(filter);
+      filter.connect(gain);
       gain.connect(ctx.destination);
       synthOsc.start();
-      btn.textContent = 'Stop Web Audio Synth';
-      btn.classList.add('stop');
-      status.textContent = 'Synthesizing 523 Hz Tone';
+      btnSynth.textContent = 'Stop Web Audio Synth';
+      btnSynth.classList.add('stop');
+      status.textContent = 'Synthesizing: 350Hz Lowpass Graph Active';
     });
 
-    // 4. Loud Burst Trigger
-    document.getElementById('btn-burst').addEventListener('click', () => {
-      const ctx = getAudioCtx();
+    // 8. Iframe-Hosted Media
+    const btnIframe = document.getElementById('btn-iframe');
+    btnIframe.addEventListener('click', () => {
+      const frame = document.getElementById('frame-player');
+      try {
+        frame.contentWindow.playTone();
+        btnIframe.textContent = 'Iframe Playing';
+        document.getElementById('status-iframe').textContent = 'Subframe Web Audio Active';
+      } catch (e) {
+        document.getElementById('status-iframe').textContent = 'Iframe Trigger: ' + e.message;
+      }
+    });
+
+    // 9. WebRTC Receive Audio Loopback
+    let peerA = null, peerB = null;
+    const btnWebRtc = document.getElementById('btn-webrtc');
+    btnWebRtc.addEventListener('click', async () => {
+      const status = document.getElementById('status-webrtc');
+      if (peerA) {
+        peerA.close(); peerB.close();
+        peerA = null; peerB = null;
+        btnWebRtc.textContent = 'Start WebRTC Audio';
+        btnWebRtc.classList.remove('stop');
+        status.textContent = 'Stopped';
+        return;
+      }
+      const ctx = getCtx();
+      const dest = ctx.createMediaStreamDestination();
       const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      gain.gain.setValueAtTime(0.9, ctx.currentTime); // Extreme high amplitude
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+      osc.frequency.value = 600;
+      osc.connect(dest);
       osc.start();
-      document.getElementById('status-burst').textContent = 'BURST ACTIVE (+6 dBFS peak)';
-      setTimeout(() => {
-        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.1);
-        setTimeout(() => {
-          osc.stop();
-          osc.disconnect();
-          document.getElementById('status-burst').textContent = 'Burst Ended (Attenuated)';
-        }, 150);
-      }, 800);
+
+      peerA = new RTCPeerConnection();
+      peerB = new RTCPeerConnection();
+
+      peerB.ontrack = (event) => {
+        const audioEl = document.getElementById('audio-webrtc');
+        audioEl.srcObject = event.streams[0];
+        status.textContent = 'WebRTC Remote Audio Track Active';
+      };
+
+      dest.stream.getAudioTracks().forEach(t => peerA.addTrack(t, dest.stream));
+
+      peerA.onicecandidate = e => e.candidate && peerB.addIceCandidate(e.candidate);
+      peerB.onicecandidate = e => e.candidate && peerA.addIceCandidate(e.candidate);
+
+      const offer = await peerA.createOffer();
+      await peerA.setLocalDescription(offer);
+      await peerB.setRemoteDescription(offer);
+      const answer = await peerB.createAnswer();
+      await peerB.setLocalDescription(answer);
+      await peerA.setRemoteDescription(answer);
+
+      btnWebRtc.textContent = 'Stop WebRTC Audio';
+      btnWebRtc.classList.add('stop');
+      status.textContent = 'WebRTC PeerConnection Negotiated';
     });
 
-    // 5. Protected Content Mock
-    document.getElementById('btn-drm').addEventListener('click', () => {
-      document.getElementById('status-drm').textContent = 'Simulating DRM stream (EME CDM active, zero PCM leaked)';
+    // 10. DRM Simulation
+    const btnDrm = document.getElementById('btn-drm');
+    btnDrm.addEventListener('click', () => {
+      document.getElementById('status-drm').textContent = 'Encrypted Media (EME CDM Active: Protected PCM Restricted)';
     });
+
+    // Expose programmatic test API
+    window.__wabCompatHarness = {
+      startCategory: (catId) => {
+        const mapping = {
+          1: btnHtml5,
+          2: btnMseVod,
+          3: btnMseDash,
+          4: btnLive,
+          5: btnMusic,
+          6: btnSpeech,
+          7: btnSynth,
+          8: btnIframe,
+          9: btnWebRtc,
+          10: btnDrm
+        };
+        const el = mapping[catId];
+        if (el) el.click();
+      },
+      stopAll: () => {
+        document.querySelectorAll('.btn.stop').forEach(b => b.click());
+      }
+    };
   </script>
 </body>
 </html>

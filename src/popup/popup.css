@@ -750,3 +750,83 @@ input[type="range"].volume-slider:focus-visible::-webkit-slider-thumb {
 .diag-log-INFO { color: #93c5fd; }
 .diag-log-WARN { color: #fde047; }
 .diag-log-ERROR { color: #fca5a5; }
+
+/* Inline Error Notification Banner (Section 11) */
+.error-banner {
+  background: var(--danger-light);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 500;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.error-banner.hidden {
+  display: none;
+}
+
+.btn-close {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--danger);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.btn-close:hover {
+  opacity: 0.8;
+}
+
+/* Relative Level Legend */
+.relative-level-legend {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 2px 2px 0;
+}
+
+/* Diagnostic Metrics Grid (Section 12) */
+.diag-metrics-view {
+  background: var(--bg-card-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 10px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diag-metric-row {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px dashed rgba(100, 116, 139, 0.2);
+  padding-bottom: 2px;
+}
+
+.diag-metric-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.diag-metric-label {
+  color: var(--text-muted);
+}
+
+.diag-metric-val {
+  font-weight: 600;
+  color: var(--text-main);
+}
+

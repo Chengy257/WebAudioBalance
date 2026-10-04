@@ -1,5 +1,5 @@
 /**
- * WebAudioBalance - AudioEngineManager
+ * WebAudioBalance - AudioEngineManager (Audio Plane)
  * Coordinates per-tab AudioEngine instances in the Offscreen Audio Runtime
  */
 
@@ -17,23 +17,32 @@ export class AudioEngineManager {
   }
 
   /**
-   * Start engine for tabId using streamId
+   * Start engine for tabId using streamId and initial configuration
    * Enforces single-engine-per-tab invariant
    */
-  async startEngine(tabId, streamId) {
+  async startEngine(tabId, streamId, options = {}) {
     if (this.engines.has(tabId)) {
       logger.warn('Stopping existing engine before starting new instance', { tabId });
       await this.stopEngine(tabId);
     }
 
-    logger.info('Creating new AudioEngine for tab', { tabId });
+    logger.info('Creating new AudioEngine for tab', { tabId, options });
     const source = new TabCaptureAudioSource(streamId);
-    const engine = new AudioEngine(tabId, source);
+    const engine = new AudioEngine(tabId, source, {
+      controllerOptions: {
+        targetLufs: options.targetLufs ?? -18.0,
+        enabled: options.normalizationEnabled ?? true
+      }
+    });
 
-    // Forward metrics to Popup
+    if (typeof options.manualOffsetDb === 'number') {
+      engine.setManualOffsetDb(options.manualOffsetDb);
+    }
+
+    // Forward metrics to Popup and SW
     engine.on('metrics', (metrics) => {
       if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage(createMessage(MessageTypes.METRICS_UPDATE, MessageTargets.POPUP, metrics)).catch(() => {});
+        chrome.runtime.sendMessage(createMessage(MessageTypes.METRICS_UPDATE, MessageTargets.BROADCAST, metrics)).catch(() => {});
       }
     });
 
@@ -76,15 +85,52 @@ export class AudioEngineManager {
     return true;
   }
 
-  setEngineGain(tabId, gainDb, rampSec) {
+  setEngineGain(tabId, gainDb) {
     const engine = this.engines.get(tabId);
     if (!engine) {
       logger.warn('Cannot set gain: no engine found for tab', { tabId });
       return false;
     }
-    const result = engine.setGainDb(gainDb, rampSec);
+    if (typeof engine.setManualOffsetDb === 'function') {
+      engine.setManualOffsetDb(gainDb);
+    } else if (typeof engine.setGainDb === 'function') {
+      engine.setGainDb(gainDb);
+    }
     this.broadcastState();
-    return Boolean(result);
+    return true;
+  }
+
+  setEngineNormalization(tabId, enabled) {
+    const engine = this.engines.get(tabId);
+    if (!engine) {
+      logger.warn('Cannot set normalization: no engine found for tab', { tabId });
+      return false;
+    }
+    engine.setNormalizationEnabled(enabled);
+    this.broadcastState();
+    return true;
+  }
+
+  setEngineTarget(tabId, targetLufs) {
+    const engine = this.engines.get(tabId);
+    if (!engine) return false;
+    engine.setTargetLufs(targetLufs);
+    this.broadcastState();
+    return true;
+  }
+
+  setGlobalTarget(targetLufs) {
+    for (const engine of this.engines.values()) {
+      engine.setTargetLufs(targetLufs);
+    }
+    this.broadcastState();
+  }
+
+  setGlobalNormalization(globalAutoEnabled) {
+    for (const engine of this.engines.values()) {
+      engine.setNormalizationEnabled(globalAutoEnabled);
+    }
+    this.broadcastState();
   }
 
   getAllStates() {
@@ -97,10 +143,18 @@ export class AudioEngineManager {
         browser: env.browser,
         browserVersion: env.version,
         captureStatus: engine.getState(),
-        testGainDb: engine.getGainDb(),
-        rmsDbFS: metrics.rmsDbFS,
-        peakDbFS: metrics.peakDbFS,
         audioContextState: metrics.audioContextState,
+        testGainDb: engine.getGainDb(),
+        autoGainDb: metrics.autoGainDb,
+        manualOffsetDb: metrics.manualOffsetDb,
+        effectiveGainDb: metrics.effectiveGainDb,
+        targetLufs: metrics.targetLufs,
+        momentaryLufs: metrics.momentaryLufs,
+        shortTermLufs: metrics.shortTermLufs,
+        peakDbFS: metrics.peakDbFS,
+        rmsDbFS: metrics.rmsDbFS,
+        isFrozen: metrics.isFrozen,
+        isActive: metrics.isActive,
         startedAt: engine.startedAt
       });
     }

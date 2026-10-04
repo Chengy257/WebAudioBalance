@@ -24,14 +24,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   switch (type) {
     case MessageTypes.START_CAPTURE:
-      engineManager.startEngine(payload.tabId, payload.streamId)
+      engineManager.startEngine(payload.tabId, payload.streamId, payload)
         .then((result) => sendResponse(result))
         .catch((err) => sendResponse({ success: false, error: err.message }));
       return true;
 
     case MessageTypes.SET_TEST_GAIN:
-      const ok = engineManager.setEngineGain(payload.tabId, payload.gainDb);
-      sendResponse({ success: ok });
+      const gainOk = engineManager.setEngineGain(payload.tabId, payload.gainDb);
+      sendResponse({ success: gainOk });
+      return true;
+
+    case MessageTypes.SET_NORMALIZATION:
+      const normOk = engineManager.setEngineNormalization(payload.tabId, payload.normalizationEnabled);
+      sendResponse({ success: normOk });
+      return true;
+
+    case MessageTypes.SET_TARGET:
+      const targetOk = engineManager.setEngineTarget(payload.tabId, payload.targetLufs);
+      sendResponse({ success: targetOk });
       return true;
 
     case MessageTypes.STOP_CAPTURE:

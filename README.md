@@ -4,9 +4,9 @@ Cross-tab perceptual loudness normalization and independent per-tab audio contro
 
 ## Status
 
-The project architecture and development mainline are frozen. Implementation has not started.
+P0 (Feasibility) has concluded with a **GO** decision (see `docs/validation/P0_FEASIBILITY_REPORT.md`).
 
-Current next phase: **P0 — Cross-Browser Audio Capture & Processing Feasibility**.
+Current phase: **P1 — Stable Audio Engine**.
 
 ## Authoritative documentation
 

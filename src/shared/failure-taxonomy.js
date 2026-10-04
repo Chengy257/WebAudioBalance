@@ -15,6 +15,39 @@ export const FailureTaxonomy = Object.freeze({
   UNKNOWN: 'unknown'
 });
 
+export const ErrorCodes = Object.freeze({
+  UNSUPPORTED_TAB: 'UNSUPPORTED_TAB',
+  STREAM_ID_ACQUISITION_FAILED: 'STREAM_ID_ACQUISITION_FAILED',
+  OFFSCREEN_UNAVAILABLE: 'OFFSCREEN_UNAVAILABLE',
+  AUDIO_ENGINE_START_FAILED: 'AUDIO_ENGINE_START_FAILED',
+  AUDIO_ENGINE_NOT_FOUND: 'AUDIO_ENGINE_NOT_FOUND',
+  AUDIO_COMMAND_REJECTED: 'AUDIO_COMMAND_REJECTED',
+  RUNTIME_RECONCILIATION_FAILED: 'RUNTIME_RECONCILIATION_FAILED',
+  TAB_GONE: 'TAB_GONE',
+  CAPTURE_STATE_MISMATCH: 'CAPTURE_STATE_MISMATCH',
+  UNKNOWN: 'UNKNOWN'
+});
+
+/**
+ * Construct a standardized runtime error object (Section 14)
+ */
+export function createRuntimeError(code, message, options = {}) {
+  const err = {
+    code: code || ErrorCodes.UNKNOWN,
+    message: message || (typeof code === 'string' ? code : 'An unexpected runtime error occurred'),
+    retryable: Boolean(options.retryable),
+    timestamp: options.timestamp || Date.now()
+  };
+  if (options.tabId !== undefined && options.tabId !== null) {
+    err.tabId = options.tabId;
+  }
+  if (options.cause !== undefined && options.cause !== null) {
+    err.cause = typeof options.cause === 'object' ? (options.cause.message || String(options.cause)) : options.cause;
+  }
+  return err;
+}
+
+
 /**
  * Classify a runtime error into the formal failure taxonomy
  * @param {Error|object|string} error

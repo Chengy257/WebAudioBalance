@@ -116,23 +116,25 @@ async function refreshAll() {
 }
 
 /**
- * Fetch Coordinator state snapshot from Service Worker
+ * Fetch Coordinator state snapshot from Service Worker (Section 6 & 16)
  */
 async function queryCoordinatorSnapshot() {
   try {
     const res = await chrome.runtime.sendMessage(createMessage(
-      MessageTypes.GET_COORDINATOR_SNAPSHOT,
+      MessageTypes.GET_PRODUCT_SNAPSHOT,
       MessageTargets.SERVICE_WORKER
     ));
 
     if (res && res.globalSettings) {
-      currentSnapshot = res;
+      if (!currentSnapshot.revision || res.revision === undefined || res.revision >= currentSnapshot.revision) {
+        currentSnapshot = res;
+      }
     }
   } catch (err) {
-    logger.warn('Failed to get coordinator snapshot, trying fallback QUERY_RUNTIME_STATE', { error: err.message });
+    logger.warn('Failed to get product snapshot, trying fallback GET_COORDINATOR_SNAPSHOT', { error: err.message });
     try {
       const fallback = await chrome.runtime.sendMessage(createMessage(
-        MessageTypes.QUERY_RUNTIME_STATE,
+        MessageTypes.GET_COORDINATOR_SNAPSHOT,
         MessageTargets.SERVICE_WORKER
       ));
       if (fallback && fallback.globalSettings) {
@@ -164,6 +166,7 @@ async function refreshDetectedTabs() {
     }
 
     detectedAudibleTabs = Array.from(tabMap.values());
+    renderDetectedTabs();
   } catch (err) {
     logger.warn('Failed to query browser tabs', { error: err.message });
   }
@@ -437,8 +440,9 @@ async function handleStartCapture(tabId) {
     if (response && response.success) {
       logger.info('Start capture successfully processed', { tabId });
     } else {
+      const errMsg = response?.error?.message || (typeof response?.error === 'string' ? response.error : 'Unknown error');
       logger.error('Start capture returned error', response);
-      alert(`Could not balance tab: ${response?.error || 'Unknown error'}`);
+      alert(`Could not balance tab: ${errMsg}`);
     }
   } catch (err) {
     logger.error('handleStartCapture exception', { error: err.message });
@@ -523,13 +527,17 @@ function setTabManualOffset(tabId, offsetDb) {
 
   debounceOffsetTimers.set(tabId, setTimeout(async () => {
     try {
-      await chrome.runtime.sendMessage(createMessage(
-        MessageTypes.SET_TEST_GAIN,
+      const res = await chrome.runtime.sendMessage(createMessage(
+        MessageTypes.SET_TAB_OFFSET,
         MessageTargets.SERVICE_WORKER,
-        { tabId, gainDb: offsetDb }
+        { tabId, gainDb: offsetDb, offsetDb, relativeOffsetDb: offsetDb }
       ));
+      if (res && !res.success) {
+        logger.error('Failed to set tab offset', res.error);
+        refreshAll();
+      }
     } catch (err) {
-      logger.error('Failed to send SET_TEST_GAIN', { tabId, error: err.message });
+      logger.error('Failed to send SET_TAB_OFFSET', { tabId, error: err.message });
     }
   }, 40));
 }
@@ -556,11 +564,15 @@ async function setTabNormalization(tabId, enabled) {
 
   logger.info('Setting tab normalization toggle', { tabId, enabled });
   try {
-    await chrome.runtime.sendMessage(createMessage(
+    const res = await chrome.runtime.sendMessage(createMessage(
       MessageTypes.SET_NORMALIZATION,
       MessageTargets.SERVICE_WORKER,
       { tabId, normalizationEnabled: enabled }
     ));
+    if (res && !res.success) {
+      logger.error('Failed to set tab normalization', res.error);
+      refreshAll();
+    }
   } catch (err) {
     logger.error('Failed to set tab normalization', { tabId, error: err.message });
   }
@@ -574,7 +586,16 @@ function handleMetricsUpdate(metrics) {
 
   const tab = currentSnapshot.managedTabs?.find((t) => t.tabId === metrics.tabId);
   if (tab) {
+    const incomingSeq = metrics.measurementSequence ?? metrics.metricsSequence;
+    const currentSeq = tab.audio?.metricsSequence ?? tab.metricsSequence;
+    if (incomingSeq !== undefined && currentSeq !== undefined && incomingSeq < currentSeq) {
+      return;
+    }
+
     Object.assign(tab, metrics);
+    if (tab.audio) {
+      Object.assign(tab.audio, metrics);
+    }
 
     const card = document.getElementById(`managed-card-${metrics.tabId}`);
     if (card) {
@@ -697,21 +718,25 @@ chrome.runtime.onMessage.addListener((message) => {
       }
       break;
 
+    case MessageTypes.AUDIO_TELEMETRY:
     case MessageTypes.METRICS_UPDATE:
       handleMetricsUpdate(payload);
       break;
 
+    case MessageTypes.PRODUCT_SNAPSHOT_CHANGED:
     case MessageTypes.COORDINATOR_SNAPSHOT:
-    case MessageTypes.RUNTIME_STATE:
-      if (payload) {
-        currentSnapshot = payload;
-        renderUI();
+      if (payload && payload.globalSettings) {
+        if (!currentSnapshot.revision || payload.revision === undefined || payload.revision >= currentSnapshot.revision) {
+          currentSnapshot = payload;
+          renderUI();
+        }
       }
       break;
 
     case MessageTypes.CAPTURE_STARTED:
     case MessageTypes.CAPTURE_STOPPED:
     case MessageTypes.CAPTURE_ERROR:
+    case MessageTypes.AUDIO_RUNTIME_LIFECYCLE:
       setTimeout(refreshAll, 150);
       break;
 

@@ -584,8 +584,20 @@ As of this frozen rebaseline:
 
 ---
 
-## 19. Next document
+## 19. R1 implementation specification
 
-The next planning artifact should be a single deliverable-oriented **R1 Audio Core Correction implementation specification** based strictly on this frozen baseline.
+The R1 implementation specification is now frozen:
 
-It should define implementation boundaries, component changes, test fixtures, deterministic processed-output benchmarks, acceptance criteria, migration/removal of legacy paths, and Codex-ready work packages without reopening R0 product scope.
+- `docs/planning/R1_AUDIO_CORE_CORRECTION_IMPLEMENTATION_SPEC.md`
+
+It defines the bounded Audio Core correction, production/test-shared DSP path, deterministic processed-output benchmarks, safety behavior, migration rules, and Codex execution order without reopening R0 scope.
+
+Current handoff state:
+
+```text
+R0  Functional Rebaseline        COMPLETE / FROZEN
+R1  Implementation Spec          COMPLETE / FROZEN
+R1  Code Implementation          NEXT
+```
+
+The next formal planning artifact is not R2. R2 planning begins only after R1 implementation has been validated and closed out with `docs/validation/R1_AUDIO_CORE_CORRECTION_REPORT.md`.

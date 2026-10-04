@@ -76,7 +76,7 @@ export class AudioEngine {
       const stream = await this.source.acquire();
 
       // 2. Initialize AudioContext
-      const AudioCtxConstructor = window.AudioContext || window.webkitAudioContext;
+      const AudioCtxConstructor = (typeof window !== 'undefined' ? (window.AudioContext || window.webkitAudioContext) : globalThis.AudioContext);
       this.audioCtx = new AudioCtxConstructor();
       if (this.audioCtx.state === 'suspended') {
         await this.audioCtx.resume();
@@ -229,6 +229,7 @@ export class AudioEngine {
 
     this.activityDetector.reset();
     this.controller.reset();
+    this.listeners.clear();
   }
 
   setManualOffsetDb(gainDb) {

@@ -596,17 +596,19 @@ Current handoff state after independent implementation review:
 
 ```text
 R0  Functional Rebaseline        COMPLETE / FROZEN
-R1  Primary Implementation       SUBSTANTIALLY COMPLETE
-R1  Closeout Correction Spec     COMPLETE / FROZEN
-R1  Closeout Correction Code     NEXT
-R2  Mainline Plan                COMPLETE / FROZEN, IMPLEMENTATION BLOCKED
-R3  Mainline Plan                COMPLETE / FROZEN, IMPLEMENTATION AFTER R2
+R1  Main + Closeout Correction   ACCEPTED EXCEPT FINAL STARTUP GUARD
+R1  Final Closeout Addendum      COMPLETE / FROZEN, CODE NEXT
+R2  Plan + Implementation Spec   COMPLETE / FROZEN, CODE BLOCKED UNTIL R1 GO
+R3  Plan + Implementation Spec   COMPLETE / FROZEN, CODE AFTER R2 GO
 ```
 
 Authoritative follow-on documents:
 
 - `docs/planning/R1_CLOSEOUT_CORRECTION_IMPLEMENTATION_SPEC.md`
+- `docs/planning/R1_FINAL_CLOSEOUT_ADDENDUM.md`
 - `docs/planning/R2_RUNTIME_STATE_RELIABILITY_PLAN.md`
+- `docs/planning/R2_RUNTIME_STATE_RELIABILITY_IMPLEMENTATION_SPEC.md`
 - `docs/planning/R3_PRODUCT_UX_REAL_WORLD_VALIDATION_PLAN.md`
+- `docs/planning/R3_PRODUCT_UX_REAL_WORLD_VALIDATION_IMPLEMENTATION_SPEC.md`
 
 R2 planning is frozen for continuity, but **R2 implementation must not begin until corrected R1 evidence is GO/FROZEN**.

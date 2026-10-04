@@ -1,5 +1,8 @@
 # WebAudioBalance — Project Mainline Plan
 
+> **CURRENT AUTHORITY NOTICE (2026-10-04):** The original P0–P6 mainline below is retained as a historical baseline. Its release conclusions are superseded by [`docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`](planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md), which is the authoritative current development plan. Post-v1 work follows R0 → R1 → R2 → R3, with R0 frozen and R1 next.
+
+
 > Status: **FROZEN BASELINE**
 >
 > Target: Chromium Manifest V3 desktop extension with first-class support for **Google Chrome** and **Microsoft Edge**.

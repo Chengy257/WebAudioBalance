@@ -592,12 +592,21 @@ The R1 implementation specification is now frozen:
 
 It defines the bounded Audio Core correction, production/test-shared DSP path, deterministic processed-output benchmarks, safety behavior, migration rules, and Codex execution order without reopening R0 scope.
 
-Current handoff state:
+Current handoff state after independent implementation review:
 
 ```text
 R0  Functional Rebaseline        COMPLETE / FROZEN
-R1  Implementation Spec          COMPLETE / FROZEN
-R1  Code Implementation          NEXT
+R1  Primary Implementation       SUBSTANTIALLY COMPLETE
+R1  Closeout Correction Spec     COMPLETE / FROZEN
+R1  Closeout Correction Code     NEXT
+R2  Mainline Plan                COMPLETE / FROZEN, IMPLEMENTATION BLOCKED
+R3  Mainline Plan                COMPLETE / FROZEN, IMPLEMENTATION AFTER R2
 ```
 
-The next formal planning artifact is not R2. R2 planning begins only after R1 implementation has been validated and closed out with `docs/validation/R1_AUDIO_CORE_CORRECTION_REPORT.md`.
+Authoritative follow-on documents:
+
+- `docs/planning/R1_CLOSEOUT_CORRECTION_IMPLEMENTATION_SPEC.md`
+- `docs/planning/R2_RUNTIME_STATE_RELIABILITY_PLAN.md`
+- `docs/planning/R3_PRODUCT_UX_REAL_WORLD_VALIDATION_PLAN.md`
+
+R2 planning is frozen for continuity, but **R2 implementation must not begin until corrected R1 evidence is GO/FROZEN**.

@@ -1,5 +1,8 @@
 # P6 — Hardening, Performance Optimization & Release Packaging Report
 
+> **Historical status notice (2026-10-04):** This report records the original P6 closeout decision. The **RELEASE READY** conclusion is no longer the current project status and has been superseded by [`docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`](../planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md). The report is retained for traceability and must not be used as current release evidence.
+
+
 > Phase: **P6 — Hardening, Performance Optimization & Release Packaging**  
 > Status: **COMPLETE**  
 > Decision: **GO (RELEASE READY)**  

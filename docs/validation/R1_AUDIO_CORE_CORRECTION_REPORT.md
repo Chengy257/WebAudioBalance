@@ -1,11 +1,14 @@
 # R1 — Audio Core Correction Validation Report
 
-> Status: **R1 GO / FROZEN (CLOSEOUT CORRECTIONS ACCEPTED)**  
+> **Final independent review notice (2026-10-04):** The closeout correction commit resolves C1–C5 and B1–B5, but one residual case remains before R1 can be permanently frozen: a positive Relative Level can still be applied before the first valid peak/safety envelope is established during initial measurement warm-up. The authoritative final requirement is `docs/planning/R1_FINAL_CLOSEOUT_ADDENDUM.md`. All other R1 evidence remains accepted.
+
+
+> Status: **R1 FINAL CLOSEOUT — ONE ADDENDUM REQUIRED / GO WITHHELD**  
 > Validation Date: **2026-10-05**  
 > Parent Specification: `docs/planning/R1_AUDIO_CORE_CORRECTION_IMPLEMENTATION_SPEC.md`  
 > Closeout Specification: `docs/planning/R1_CLOSEOUT_CORRECTION_IMPLEMENTATION_SPEC.md`  
 > Baseline Architecture: `docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`  
-> Phase Status: **Accepted & Frozen** (All R1 closeout gates pass; unlocked for R2 implementation)
+> Phase Status: **Substantially accepted; final startup safety addendum pending before R2 implementation**
 
 ---
 
@@ -28,7 +31,7 @@ Phase **R1 — Audio Core Correction** has completed all core implementation and
 | **Mono Browser Path (B5)** | True 1-channel destination, ITU-R BS.1770 conformance, no +3 LU bias | Observed $-23.0\text{ LUFS}$ (err $0.00\text{ LU}$); 3.0 LU below stereo without duplication bias | **PASS** |
 | **Metric Semantic Integrity (C5)** | No LUFS under `rmsDbFS`; diagnostic RMS from `EngineeringMeter` | `EngineeringMeter` provides true RMS dBFS; LUFS strictly under `shortTermLufs` | **PASS** |
 
-**Final Decision**: **R1 GO / ACCEPTED**. The audio core is mathematically verified, empirically proven in real browser runtime, and frozen. Implementation of Phase R2 may proceed.
+**Provisional Closeout Decision**: C1–C5/B1–B5 are accepted. **Final R1 GO is withheld only for the pre-measurement positive-gain guard defined in `R1_FINAL_CLOSEOUT_ADDENDUM.md`.** R2 code implementation begins only after that regression passes.
 
 ---
 

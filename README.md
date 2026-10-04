@@ -1,7 +1,7 @@
 # WebAudioBalance
 
-> **Current Status: R1 Audio Core Correction — IMPLEMENTATION SPEC FROZEN / IMPLEMENTATION NEXT**  
-> R0 functional rebaseline is frozen. The previous v1.0.0 release-ready conclusion remains superseded while the audio core, runtime reliability, and product validation are rebuilt under the post-v1 mainline.
+> **Current Status: R1 Audio Core Correction — CLOSEOUT CORRECTION REQUIRED / GO WITHHELD**  
+> The main R1 implementation is substantially complete, but independent review identified a hard-safety enforcement defect and browser-validation gaps. Complete the frozen R1 closeout correction before R2 implementation. The previous v1.0.0 release-ready conclusion remains superseded.
 
 ---
 
@@ -20,7 +20,7 @@ The current product direction retains the validated Chromium extension architect
 
 ## 2. Current Development Status
 
-The authoritative current plan is [`docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`](docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md). The frozen R1 engineering handoff is [`docs/planning/R1_AUDIO_CORE_CORRECTION_IMPLEMENTATION_SPEC.md`](docs/planning/R1_AUDIO_CORE_CORRECTION_IMPLEMENTATION_SPEC.md).
+The authoritative current plan is [`docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`](docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md). Current execution is governed by [`R1_CLOSEOUT_CORRECTION_IMPLEMENTATION_SPEC.md`](docs/planning/R1_CLOSEOUT_CORRECTION_IMPLEMENTATION_SPEC.md). R2 and R3 mainline plans are frozen for continuity but their implementation remains dependency-gated.
 
 The original P0–P6 cycle and its validation reports are retained as historical engineering records. Their previous **GO / RELEASE READY** decisions do not satisfy the post-v1 release gate. Historical test counts must not be interpreted as proof that the current product achieves reliable absolute cross-tab loudness balancing.
 
@@ -28,10 +28,11 @@ Current correction mainline:
 
 ```text
 R0  Functional Rebaseline              COMPLETE / FROZEN
-R1  Audio Core Correction Spec          COMPLETE / FROZEN
-R1  Audio Core Implementation           NEXT
-R2  Runtime & State Reliability         PLANNED
-R3  Product UX & Real-world Validation  PLANNED
+R1  Primary Audio Core Implementation   SUBSTANTIALLY COMPLETE
+R1  Closeout Correction Spec            COMPLETE / FROZEN
+R1  Closeout Correction Code            NEXT
+R2  Runtime & State Reliability Plan    COMPLETE / FROZEN, IMPLEMENTATION BLOCKED
+R3  Product UX & Validation Plan        COMPLETE / FROZEN, IMPLEMENTATION AFTER R2
 ```
 
 ## 3. Historical P0–P6 Development Record

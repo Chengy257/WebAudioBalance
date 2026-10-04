@@ -512,6 +512,34 @@ async function runR1CoreTests() {
       Math.abs(negOffsetState.appliedGainDb - (negOffsetState.appliedAutoGainDb + negOffsetState.relativeOffsetDb)) < 1e-4,
       'Internal gain fields remain mutually consistent: appliedGainDb == appliedAutoGainDb + relativeOffsetDb'
     );
+
+    // 9.6 Pre-Measurement Positive-Gain Guard (R1 Final Closeout Addendum)
+    const ctrlPre = new NormalizationController({ targetLufs: -18.0 });
+    assert(ctrlPre.hasValidSafetyPeak === false, 'New controller has no valid safety peak');
+    assert(ctrlPre.getState().appliedGainDb === 0.0, 'Initial applied gain is 0 dB');
+
+    // 1. Request positive relative offset before any measurement exists
+    ctrlPre.setRelativeOffsetDb(6.0);
+    const preOffsetState = ctrlPre.getState();
+    assert(preOffsetState.relativeOffsetDb === 6.0, 'Requested relative offset recorded as user intent (+6.0 dB)');
+    assert(preOffsetState.appliedGainDb <= 0.0, `Applied gain does NOT rise above 0 dB before safety evidence (observed: ${preOffsetState.appliedGainDb} dB)`);
+    assert(preOffsetState.isLimited === true, 'Controller reports isLimited=true during pre-measurement positive offset attempt');
+    assert(preOffsetState.limitReason === 'warmup', 'limitReason is reported as warmup');
+
+    // 2. Feed incomplete/warming up measurement (momentaryValid: false)
+    const warmupState = ctrlPre.update({ momentaryLufs: -20.0, shortTermLufs: -20.0, samplePeakDbFS: -20.0, momentaryValid: false, shortTermValid: false }, true, 0.1);
+    assert(warmupState.appliedGainDb <= 0.0, `Applied gain remains <= 0 dB during warm-up (observed: ${warmupState.appliedGainDb} dB)`);
+    assert(ctrlPre.hasValidSafetyPeak === false, 'hasValidSafetyPeak remains false while momentaryValid is false');
+
+    // 3. Feed valid safe peak measurement (momentaryValid: true, safe peak -10 dBFS -> safeHeadroomGain = -1 - 1 - (-10) = +8 dB)
+    const validMetrics = { momentaryLufs: -20.0, shortTermLufs: -20.0, samplePeakDbFS: -10.0, momentaryValid: true, shortTermValid: true };
+    const step1State = ctrlPre.update(validMetrics, true, 0.1);
+    assert(ctrlPre.hasValidSafetyPeak === true, 'hasValidSafetyPeak transitions to true upon valid measurement');
+    assert(ctrlPre.lastSafeMaxGainDb >= 6.0, `Safe maximum envelope computed: ${ctrlPre.lastSafeMaxGainDb} dB`);
+
+    // 4. Adaptation begins growing only through normal controlled release rate (1.5 dB/s * 0.1s = 0.15 dB)
+    assert(step1State.appliedGainDb > preOffsetState.appliedGainDb, 'Positive gain becomes eligible to grow only after valid safety evidence');
+    assert(step1State.appliedGainDb <= 0.2, `Gain growth on step 1 constrained by release rate (observed: ${step1State.appliedGainDb} dB)`);
   }
 
   // =========================================================================

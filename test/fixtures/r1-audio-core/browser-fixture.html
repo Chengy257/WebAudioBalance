@@ -504,6 +504,62 @@
         await engineMono.stop();
         monoOsc.stop();
 
+        // --- SECTION 6: B6 Pre-Measurement Positive-Gain Guard (R1 Final Closeout Addendum) ---
+        console.log('=== SECTION 6: B6 Pre-Measurement Positive-Gain Guard ===');
+        const destB6 = synthCtx.createMediaStreamDestination();
+        const oscB6 = synthCtx.createOscillator();
+        oscB6.frequency.value = 1000;
+        const gainB6 = synthCtx.createGain();
+        gainB6.gain.value = 0.1259; // -18 LUFS steady tone
+        oscB6.connect(gainB6);
+        gainB6.connect(destB6);
+        oscB6.start();
+
+        const engineB6 = new AudioEngine(601, new SyntheticStreamSource(destB6.stream), {
+          workletUrl: '/src/engine/worklets/loudness-meter-processor.js',
+          cycleIntervalMs: 50
+        });
+
+        // 1. Start AudioEngine
+        await engineB6.start();
+
+        // 2. Request positive relative level (+6.0 dB) immediately before first valid Momentary measurement
+        engineB6.setRelativeOffsetDb(6.0);
+
+        // 3. Inspect the first control cycles (first 200ms < 400ms momentary window)
+        await sleep(100);
+        const mEarly1 = engineB6.getMetrics();
+        const gEarly1 = engineB6.getGainDb();
+
+        await sleep(100);
+        const mEarly2 = engineB6.getMetrics();
+        const gEarly2 = engineB6.getGainDb();
+
+        // 4. Assert GainProcessor does not apply positive boost before valid safety evidence
+        const noBoostEarly = gEarly1 <= 0.0 && gEarly2 <= 0.0 &&
+          mEarly1.appliedGainDb <= 0.0 && mEarly2.appliedGainDb <= 0.0 &&
+          mEarly1.inputMomentaryValid === false;
+
+        record('B6 Pre-Measurement Positive-Gain Guard', noBoostEarly,
+          `Early cycles (t < 250ms, momentaryValid=false): gainProcessor=${gEarly1.toFixed(2)} dB, ` +
+          `appliedGainDb=${mEarly1.appliedGainDb} dB (<= 0.0 dB, no positive boost before safety peak)`
+        );
+
+        // 5. Once measurement is valid, verify normal convergence to -12.0 LUFS (-18.0 target + 6.0 offset)
+        // At 1.5 dB/s, +6 dB takes ~4s + 3s warm-up = ~7.5s
+        await sleep(7500);
+        const mB6Settled = engineB6.getMetrics();
+        const errB6 = Math.abs(mB6Settled.outputShortTermLufs - (-12.0));
+
+        record('B6 Normal Convergence After Valid Safety Evidence',
+          mB6Settled.outputShortTermValid === true && errB6 <= 1.0,
+          `Output reconverged to effective target (-12.0 LUFS) after safety validation: ` +
+          `output=${mB6Settled.outputShortTermLufs} LUFS, appliedGainDb=${mB6Settled.appliedGainDb} dB (err: ${errB6.toFixed(2)} LU)`
+        );
+
+        await engineB6.stop();
+        oscB6.stop();
+
         record('Clean Teardown', true, 'All AudioEngines, AudioWorklets, and oscillators terminated cleanly');
       } finally {
         await synthCtx.close();

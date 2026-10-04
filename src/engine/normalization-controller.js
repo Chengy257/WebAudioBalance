@@ -26,20 +26,33 @@ export class NormalizationController {
 
     this.normalizationEnabled = options.enabled ?? options.normalizationEnabled ?? true;
 
+    // Safety envelope tracking (R1 Final Closeout Addendum)
+    this.hasValidSafetyPeak = false;
+    this.lastSafeMaxGainDb = 0.0;
+
     // Controller state variables
     this.candidateAutoGainDb = 0.0;
     this.desiredAutoGainDb = 0.0;
     this.appliedAutoGainDb = 0.0;
     this.stableTargetAutoGainDb = 0.0;
-    this.requestedTotalGainDb = 0.0;
-    this.appliedGainDb = 0.0;
+    this.requestedTotalGainDb = this.relativeOffsetDb;
     this.gainErrorDb = 0.0;
 
-    this.lastSafeMaxGainDb = this.maxGainDb;
+    if (this.relativeOffsetDb > 0.0) {
+      this.appliedGainDb = 0.0;
+      this.appliedAutoGainDb = -this.relativeOffsetDb;
+      this.candidateAutoGainDb = this.appliedAutoGainDb;
+      this.isLimited = true;
+      this.limitReason = 'warmup';
+    } else {
+      this.appliedGainDb = this.relativeOffsetDb;
+      this.appliedAutoGainDb = 0.0;
+      this.candidateAutoGainDb = 0.0;
+    }
 
     this.isFrozen = false;
-    this.isLimited = false;
-    this.limitReason = null;
+    this.isLimited = this.relativeOffsetDb > 0.0;
+    this.limitReason = this.relativeOffsetDb > 0.0 ? 'warmup' : null;
 
     this.lastUpdateTime = null;
   }
@@ -54,6 +67,8 @@ export class NormalizationController {
     this.candidateAutoGainDb = num;
     this.stableTargetAutoGainDb = num;
     this.appliedGainDb = Math.max(this.minGainDb, Math.min(this.maxGainDb, num + this.relativeOffsetDb));
+    this.hasValidSafetyPeak = true;
+    this.lastSafeMaxGainDb = this.maxGainDb;
   }
 
   get manualOffsetDb() {
@@ -84,10 +99,23 @@ export class NormalizationController {
       this.requestedTotalGainDb = this.candidateAutoGainDb + this.relativeOffsetDb;
     } else {
       // Positive offset change: MUST NOT bypass latest safety envelope
-      const maxAllowed = Math.min(this.maxGainDb, this.lastSafeMaxGainDb ?? this.maxGainDb);
-      const requestedTotal = this.appliedAutoGainDb + offsetDb;
       this.relativeOffsetDb = offsetDb;
+      const requestedTotal = this.appliedAutoGainDb + offsetDb;
       this.requestedTotalGainDb = requestedTotal;
+
+      if (!this.hasValidSafetyPeak) {
+        // No valid peak measurement established yet for current epoch:
+        // Record user intent but do not increase applied gain above safe startup envelope (<= 0 dB)
+        const safeStartupMax = Math.min(0.0, this.lastSafeMaxGainDb);
+        this.appliedGainDb = Math.min(this.appliedGainDb, safeStartupMax);
+        this.appliedAutoGainDb = this.appliedGainDb - this.relativeOffsetDb;
+        this.candidateAutoGainDb = this.appliedAutoGainDb;
+        this.isLimited = true;
+        this.limitReason = 'warmup';
+        return;
+      }
+
+      const maxAllowed = Math.min(this.maxGainDb, this.lastSafeMaxGainDb ?? this.maxGainDb);
 
       if (requestedTotal > maxAllowed) {
         this.appliedGainDb = maxAllowed;
@@ -211,6 +239,7 @@ export class NormalizationController {
     const safeHeadroomGain = this.outputCeilingDbFS - this.peakMarginDb - samplePeakDbFS;
     const maxSafeGainDb = Math.min(this.maxGainDb, safeHeadroomGain);
     this.lastSafeMaxGainDb = safeHeadroomGain;
+    this.hasValidSafetyPeak = true;
 
     // 6. Deadband on normal target updates: prevent hunting from micro-fluctuations
     if (Math.abs(this.desiredAutoGainDb - this.stableTargetAutoGainDb) > this.deadbandDb) {
@@ -286,6 +315,7 @@ export class NormalizationController {
       isFrozen: frozen,
       isLimited: this.isLimited,
       limitReason: this.limitReason,
+      hasValidSafetyPeak: this.hasValidSafetyPeak,
       normalizationEnabled: this.normalizationEnabled,
 
       // Compatibility aliases for legacy consumers
@@ -298,6 +328,11 @@ export class NormalizationController {
     };
   }
 
+  resetEpoch() {
+    this.hasValidSafetyPeak = false;
+    this.lastSafeMaxGainDb = 0.0;
+  }
+
   reset() {
     this.candidateAutoGainDb = 0.0;
     this.desiredAutoGainDb = 0.0;
@@ -306,7 +341,8 @@ export class NormalizationController {
     this.requestedTotalGainDb = 0.0;
     this.appliedGainDb = 0.0;
     this.gainErrorDb = 0.0;
-    this.lastSafeMaxGainDb = this.maxGainDb;
+    this.hasValidSafetyPeak = false;
+    this.lastSafeMaxGainDb = 0.0;
     this.isFrozen = false;
     this.isLimited = false;
     this.limitReason = null;

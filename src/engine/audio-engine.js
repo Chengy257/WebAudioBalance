@@ -159,6 +159,7 @@ export class AudioEngine {
     if (!this.wasActive && activity.isActive) {
       if (this.inputMeter) this.inputMeter.resetEpoch();
       if (this.outputMeter) this.outputMeter.resetEpoch();
+      if (this.controller) this.controller.resetEpoch();
     }
     this.wasActive = activity.isActive;
 
@@ -222,6 +223,7 @@ export class AudioEngine {
       isFrozen: ctrlState.isFrozen,
       isLimited: ctrlState.isLimited,
       limitReason: ctrlState.limitReason,
+      hasValidSafetyPeak: ctrlState.hasValidSafetyPeak,
       measurementSequence: inputMetrics.measurementSequence,
       audioContextState: this.audioCtx?.state || 'closed',
 
@@ -402,6 +404,7 @@ export class AudioEngine {
       isFrozen: ctrlState.isFrozen,
       isLimited: ctrlState.isLimited,
       limitReason: ctrlState.limitReason,
+      hasValidSafetyPeak: ctrlState.hasValidSafetyPeak,
       measurementSequence: inputMetrics.measurementSequence,
       audioContextState: this.audioCtx?.state || 'closed',
 

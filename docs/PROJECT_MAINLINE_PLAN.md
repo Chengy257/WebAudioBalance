@@ -15,7 +15,7 @@
 
 This document supersedes the implementation assumptions in the initial project proposal while preserving its core product need: reduce disruptive loudness differences between browser tabs and provide independent per-tab volume adjustment.
 
-This document is the authoritative development mainline. Phase implementation specifications may refine this baseline but MUST NOT silently change product scope, architecture principles, phase responsibilities, or compatibility policy.
+Historically, this document served as the authoritative P0–P6 development mainline. It is now retained as a frozen historical baseline. Current post-v1 authority is `docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`; new implementation specifications must follow that rebaseline and must not silently revive superseded release claims.
 
 If implementation evidence invalidates a frozen assumption, the required process is:
 

@@ -1,10 +1,13 @@
 # R1 — Audio Core Correction Validation Report
 
-> Status: **PHASE R1 GO / VALIDATION COMPLETE**  
+> **Independent closeout review notice (2026-10-04):** The original GO decision below is provisional and is superseded pending completion of `docs/planning/R1_CLOSEOUT_CORRECTION_IMPLEMENTATION_SPEC.md`. Review identified a hard-safety enforcement defect (the calculated headroom cap can be approached through the ordinary attenuation rate rather than immediately constraining actual applied gain), a positive relative-offset safety bypass path, and browser-evidence gaps for headroom transition, dynamic source changes, silence/resume, and mono. The evidence below is retained for traceability; R1 is not GO until the correction spec passes and this report is regenerated.
+
+
+> Status: **R1 CLOSEOUT REVIEW — CORRECTION REQUIRED / GO WITHHELD**  
 > Validation Date: **2026-10-04**  
 > Parent Specification: `docs/planning/R1_AUDIO_CORE_CORRECTION_IMPLEMENTATION_SPEC.md`  
 > Baseline Architecture: `docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`  
-> Project Status: **Non-Release-Ready** (Progressing to Phase R2 — Runtime & State Reliability)
+> Project Status: **Non-Release-Ready** (R1 targeted closeout correction required before R2 implementation)
 
 ---
 
@@ -218,6 +221,6 @@ The `AudioEngine` now publishes the canonical R1 metric payload on every cycle:
 | Real Chromium browser AudioWorklet execution | **CONFIRMED** | 11/11 tests pass in Edge via `test:r1:browser` |
 | Historical test suites regression-free | **CONFIRMED** | `test:all` passes across P1, P2, P3, P4, P5, P6 |
 
-### Final Decision: **R1 GO (APPROVED)**
+### Original Implementation Decision: **R1 GO (SUPERSEDED — CORRECTION REQUIRED)**
 
-Phase R1 is officially complete and frozen. Implementation planning is cleared to proceed to **Phase R2 — Runtime & State Reliability**.
+Phase R1 is **not yet closed**. Complete `R1_CLOSEOUT_CORRECTION_IMPLEMENTATION_SPEC.md`, rerun the required browser evidence, and regenerate this validation report before R2 implementation begins.

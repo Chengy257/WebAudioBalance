@@ -1,7 +1,7 @@
 # WebAudioBalance
 
-> **Current Status: Post-v1 Functional Rebaseline — R0 FROZEN**  
-> The previous v1.0.0 release-ready conclusion has been superseded after real-use review identified core normalization, runtime-state, UI interaction, and validation-evidence defects. The Chromium MV3 architecture is retained while the product is corrected and revalidated.
+> **Current Status: R1 Audio Core Correction — IMPLEMENTATION SPEC FROZEN / IMPLEMENTATION NEXT**  
+> R0 functional rebaseline is frozen. The previous v1.0.0 release-ready conclusion remains superseded while the audio core, runtime reliability, and product validation are rebuilt under the post-v1 mainline.
 
 ---
 

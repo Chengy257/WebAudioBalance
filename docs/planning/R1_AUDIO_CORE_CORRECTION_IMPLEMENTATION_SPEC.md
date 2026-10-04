@@ -1,5 +1,8 @@
 # R1 — Audio Core Correction Implementation Specification
 
+> **Closeout correction notice (2026-10-04):** Implementation commit `3fb2b9ce6ec1929af0eb5ead84b69b15c989fd73` substantially implemented this specification, but independent closeout review withheld R1 GO. The authoritative targeted follow-up is `docs/planning/R1_CLOSEOUT_CORRECTION_IMPLEMENTATION_SPEC.md`. This original R1 spec remains the baseline; the correction document narrows the remaining blocking work.
+
+
 > Status: **FROZEN IMPLEMENTATION SPEC**  
 > Frozen Date: **2026-10-04**  
 > Parent baseline: `docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`  

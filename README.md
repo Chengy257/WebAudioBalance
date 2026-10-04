@@ -9,12 +9,12 @@
 
 **WebAudioBalance** solves the common problem of inconsistent audio volume across different browser tabs. When switching between YouTube videos, Bilibili streams, Twitch broadcasts, podcasts, and video meetings, volume levels often fluctuate wildly. 
 
-Unlike traditional browser extensions that rely on simplistic global peak limiters or invasive DOM scripts, WebAudioBalance provides:
-- **Perceptual Loudness Normalization**: Implements ITU-R BS.1770-4 K-weighting filters with integrated Momentary (400ms) and Short-Term (3s) LUFS metering;
-- **Decentralized Multi-Tab Architecture**: Each tab runs an independent, isolated `AudioEngine`. Tab A source loudness variations **never** trigger gain changes in Tab B (zero cross-tab AGC feedback loops);
-- **Smooth Manual Offsets**: Users can apply independent manual volume offsets ($\pm 12\text{ dB}$) with 40ms parameter smoothing on top of or in place of automatic normalization;
-- **Zero Native Dependencies**: 100% pure Web Audio API and standard JavaScript; no native binaries, drivers, or external processes required;
-- **Strict Decoupling**: Control plane (Service Worker) and Audio plane (Offscreen Document) operate independently; closing or opening the popup causes zero audio dropouts.
+The current product direction retains the validated Chromium extension architecture while reworking the loudness-control implementation and release evidence:
+- **Absolute loudness target model**: each user-enabled tab should independently converge toward a shared perceptual loudness target;
+- **Independent per-tab AudioEngines**: one tab's source changes must not directly drive another tab's controller;
+- **Relative per-tab adjustment**: the user slider is defined as an offset from the shared target;
+- **Continuous loudness measurement and processed-output verification**: these are required by the frozen post-v1 rebaseline and are being rebuilt/revalidated in R1;
+- **Chromium MV3 architecture retained**: tab capture, Offscreen Audio Runtime, Service Worker control plane, and a unified Chrome/Edge codebase remain the platform baseline.
 
 ---
 

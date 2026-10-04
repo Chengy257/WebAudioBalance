@@ -2,71 +2,99 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>WebAudioBalance P0 PoC</title>
+  <title>WebAudioBalance</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header class="header">
-    <div class="brand">
-      <span class="icon">🔊</span>
-      <strong>WebAudioBalance</strong>
-      <span class="badge">P0 Feasibility PoC</span>
-    </div>
-    <div class="env-info" id="envInfo">Detecting browser...</div>
-  </header>
-
-  <main class="content">
-    <!-- Target Tab Card -->
-    <section class="card">
-      <div class="card-title">Current Tab Information</div>
-      <div class="tab-meta" id="tabMeta">
-        <div><strong>Tab ID:</strong> <span id="currentTabId">-</span></div>
-        <div><strong>Title:</strong> <span id="currentTabTitle" class="truncate">-</span></div>
-        <div><strong>Audible:</strong> <span id="currentTabAudible" class="status-tag">-</span></div>
-      </div>
-      <div class="btn-group">
-        <button id="btnEnableCapture" class="btn btn-primary">Enable Capture for This Tab</button>
-        <button id="btnStopCapture" class="btn btn-danger" disabled>Stop Capture</button>
-      </div>
-    </section>
-
-    <!-- Test Gain Controls -->
-    <section class="card">
-      <div class="card-title">Deterministic Test Gain (Current Tab)</div>
-      <div class="gain-buttons">
-        <button class="btn btn-secondary gain-preset" data-gain="-6">-6 dB (0.5x)</button>
-        <button class="btn btn-secondary gain-preset" data-gain="0">0 dB (1.0x)</button>
-        <button class="btn btn-secondary gain-preset" data-gain="6">+6 dB (2.0x)</button>
-      </div>
-      <div class="slider-row">
-        <input type="range" id="gainSlider" min="-12" max="12" step="1" value="0">
-        <span id="gainValueDisplay">0 dB</span>
-      </div>
-    </section>
-
-    <!-- Active Managed Streams -->
-    <section class="card">
-      <div class="card-title">
-        <span>Active Managed Tab Sessions</span>
-        <button id="btnRefreshState" class="btn btn-sm">Refresh</button>
-      </div>
-      <div id="activeStreamsContainer" class="streams-container">
-        <div class="empty-hint">No active capture sessions</div>
-      </div>
-    </section>
-
-    <!-- Live Diagnostics & Logs -->
-    <section class="card">
-      <div class="card-title">
-        <span>Diagnostics & Observability</span>
-        <div>
-          <button id="btnCopyReport" class="btn btn-sm">Copy Report</button>
-          <button id="btnClearLogs" class="btn btn-sm">Clear</button>
+  <div class="app-container">
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-icon" aria-hidden="true">🔊</span>
+        <div class="brand-text">
+          <h1 class="brand-title">WebAudioBalance</h1>
+          <span class="brand-subtitle">Smart Tab Loudness Normalizer</span>
         </div>
       </div>
-      <div id="logViewer" class="log-viewer"></div>
+      <div class="header-actions">
+        <button id="btnRefresh" class="icon-btn" title="Refresh tabs" aria-label="Refresh tabs">🔄</button>
+        <button id="btnToggleDiagnostics" class="icon-btn" title="Toggle diagnostics" aria-label="Toggle diagnostics">⚙️</button>
+      </div>
+    </header>
+
+    <!-- Master Controls Section -->
+    <section class="master-card" aria-label="Master Controls">
+      <div class="master-row">
+        <div class="master-label-group">
+          <span class="master-label">Global Auto Balance</span>
+          <span class="master-desc">Keep all managed tabs at a consistent volume</span>
+        </div>
+        <button id="btnGlobalAuto" class="switch" role="switch" aria-checked="true" aria-label="Toggle global auto balance">
+          <span class="switch-handle"></span>
+        </button>
+      </div>
+
+      <div class="level-selector-group">
+        <label class="section-sublabel" id="levelGroupLabel">Listening Level Target</label>
+        <div class="segmented-control" role="radiogroup" aria-labelledby="levelGroupLabel">
+          <button class="segment-btn" data-level="quiet" role="radio" aria-checked="false">
+            <span class="segment-title">Quiet</span>
+            <span class="segment-desc">-24 LUFS</span>
+          </button>
+          <button class="segment-btn active" data-level="normal" role="radio" aria-checked="true">
+            <span class="segment-title">Normal</span>
+            <span class="segment-desc">-18 LUFS</span>
+          </button>
+          <button class="segment-btn" data-level="loud" role="radio" aria-checked="false">
+            <span class="segment-title">Loud</span>
+            <span class="segment-desc">-14 LUFS</span>
+          </button>
+        </div>
+      </div>
     </section>
-  </main>
+
+    <!-- Active Managed Tabs Section -->
+    <section class="section" aria-label="Managed Tabs">
+      <div class="section-header">
+        <h2 class="section-title">Managed Tabs</h2>
+        <span id="managedCountBadge" class="count-badge">0</span>
+      </div>
+      <div id="managedTabsContainer" class="tabs-deck">
+        <div class="empty-state">
+          <p>No tabs currently under management.</p>
+          <p class="empty-hint">Select a detected tab below or right-click any page to balance its audio.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Detected Audible Tabs Section -->
+    <section class="section" aria-label="Detected Audio Tabs">
+      <div class="section-header">
+        <h2 class="section-title">Detected Audio Tabs</h2>
+        <span id="detectedCountBadge" class="count-badge">0</span>
+      </div>
+      <div id="detectedTabsContainer" class="tabs-deck">
+        <div class="empty-state">
+          <p>No other audible tabs found.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Collapsible Advanced Diagnostics Drawer -->
+    <details id="diagnosticsDrawer" class="diagnostics-drawer">
+      <summary class="diagnostics-summary">Advanced Diagnostics & Engineering</summary>
+      <div class="diagnostics-content">
+        <div class="diagnostics-bar">
+          <span id="envDisplay" class="env-text">Chromium MV3</span>
+          <div>
+            <button id="btnCopyDiagReport" class="btn btn-sm">Copy Report</button>
+            <button id="btnClearDiagLogs" class="btn btn-sm">Clear</button>
+          </div>
+        </div>
+        <div id="diagnosticsLog" class="diag-log-view"></div>
+      </div>
+    </details>
+  </div>
 
   <script type="module" src="popup.js"></script>
 </body>

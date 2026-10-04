@@ -1,279 +1,691 @@
 /**
- * WebAudioBalance P0 Feasibility Harness - Popup Controller
+ * WebAudioBalance - Product UI Controller (Popup)
+ * Connects MultiTabCoordinator control plane with user-facing presentation layer
  */
 
 import { MessageTargets, MessageTypes, createMessage } from '../shared/messages.js';
 import { StructuredLogger, getBrowserInfo, getStoredLogs, clearStoredLogs } from '../shared/logger.js';
+import { ListeningLevels, getListeningLevelByTarget, presentTabStatus, checkUrlSupport } from './state-presenter.js';
 
-const logger = new StructuredLogger('PopupUI');
+const logger = new StructuredLogger('ProductUI');
 
-let currentTab = null;
-let activeSessions = [];
+// Local UI state
+let currentSnapshot = {
+  globalSettings: { globalAutoEnabled: true, globalTargetLufs: -18.0 },
+  managedTabs: [],
+  allTabs: []
+};
+let detectedAudibleTabs = [];
+let activeTabInfo = null;
+let activeDragTabId = null; // Prevents incoming telemetry from snapping slider during user drag
 
 // DOM Elements
-const envInfoEl = document.getElementById('envInfo');
-const currentTabIdEl = document.getElementById('currentTabId');
-const currentTabTitleEl = document.getElementById('currentTabTitle');
-const currentTabAudibleEl = document.getElementById('currentTabAudible');
-const btnEnableCapture = document.getElementById('btnEnableCapture');
-const btnStopCapture = document.getElementById('btnStopCapture');
-const gainSlider = document.getElementById('gainSlider');
-const gainValueDisplay = document.getElementById('gainValueDisplay');
-const activeStreamsContainer = document.getElementById('activeStreamsContainer');
-const btnRefreshState = document.getElementById('btnRefreshState');
-const btnCopyReport = document.getElementById('btnCopyReport');
-const btnClearLogs = document.getElementById('btnClearLogs');
-const logViewer = document.getElementById('logViewer');
+const envDisplayEl = document.getElementById('envDisplay');
+const btnRefresh = document.getElementById('btnRefresh');
+const btnToggleDiagnostics = document.getElementById('btnToggleDiagnostics');
+const diagnosticsDrawer = document.getElementById('diagnosticsDrawer');
+const diagnosticsLog = document.getElementById('diagnosticsLog');
+const btnCopyDiagReport = document.getElementById('btnCopyDiagReport');
+const btnClearDiagLogs = document.getElementById('btnClearDiagLogs');
 
-// Initialize Popup
+const btnGlobalAuto = document.getElementById('btnGlobalAuto');
+const levelButtons = document.querySelectorAll('.segment-btn');
+
+const managedCountBadge = document.getElementById('managedCountBadge');
+const managedTabsContainer = document.getElementById('managedTabsContainer');
+
+const detectedCountBadge = document.getElementById('detectedCountBadge');
+const detectedTabsContainer = document.getElementById('detectedTabsContainer');
+
+/**
+ * Initialize Popup
+ */
 async function init() {
   const env = getBrowserInfo();
-  envInfoEl.textContent = `${env.browser} ${env.version}`;
-  logger.info('Popup initialized', { env });
-
-  // Get current active tab
-  try {
-    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tabs && tabs.length > 0) {
-      currentTab = tabs[0];
-      currentTabIdEl.textContent = currentTab.id;
-      currentTabTitleEl.textContent = currentTab.title || currentTab.url || 'No title';
-      currentTabTitleEl.title = currentTab.title || currentTab.url || '';
-      updateAudibleBadge(currentTab.audible);
-    }
-  } catch (err) {
-    logger.error('Failed to query current tab', { error: err.message });
+  if (envDisplayEl) {
+    envDisplayEl.textContent = `${env.browser} ${env.version}`;
   }
+  logger.info('Product UI initialized', { env });
 
-  // Bind Event Listeners
-  btnEnableCapture.addEventListener('click', handleEnableCapture);
-  btnStopCapture.addEventListener('click', handleStopCapture);
-  btnRefreshState.addEventListener('click', refreshRuntimeState);
-  btnCopyReport.addEventListener('click', handleCopyReport);
-  btnClearLogs.addEventListener('click', handleClearLogs);
+  setupEventListeners();
+  renderLogs();
 
-  // Gain Presets
-  document.querySelectorAll('.gain-preset').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      const gain = Number(e.target.dataset.gain);
-      setGain(gain);
+  await refreshAll();
+
+  // Periodically refresh detected tabs while popup is open
+  setInterval(refreshDetectedTabs, 3000);
+}
+
+/**
+ * Setup static DOM listeners
+ */
+function setupEventListeners() {
+  btnRefresh.addEventListener('click', () => refreshAll());
+
+  btnToggleDiagnostics.addEventListener('click', () => {
+    if (diagnosticsDrawer) {
+      diagnosticsDrawer.open = !diagnosticsDrawer.open;
+    }
+  });
+
+  btnCopyDiagReport.addEventListener('click', handleCopyDiagnosticsReport);
+  btnClearDiagLogs.addEventListener('click', handleClearDiagnosticsLogs);
+
+  // Global Auto-Balance Toggle
+  btnGlobalAuto.addEventListener('click', () => {
+    const nextState = !currentSnapshot.globalSettings.globalAutoEnabled;
+    setGlobalAuto(nextState);
+  });
+
+  // Listening Level Segmented Control
+  levelButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const levelId = btn.dataset.level;
+      const levelObj = ListeningLevels.find((l) => l.id === levelId);
+      if (levelObj) {
+        setListeningLevel(levelObj.targetLufs);
+      }
+    });
+
+    // Keyboard navigation for segmented radio buttons
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = btn.nextElementSibling || levelButtons[0];
+        next.focus();
+        next.click();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = btn.previousElementSibling || levelButtons[levelButtons.length - 1];
+        prev.focus();
+        prev.click();
+      }
     });
   });
-
-  // Gain Slider
-  gainSlider.addEventListener('input', (e) => {
-    const gain = Number(e.target.value);
-    gainValueDisplay.textContent = `${gain > 0 ? '+' : ''}${gain} dB`;
-  });
-
-  gainSlider.addEventListener('change', (e) => {
-    const gain = Number(e.target.value);
-    setGain(gain);
-  });
-
-  // Load existing logs into view
-  renderExistingLogs();
-
-  // Query initial runtime state from Service Worker / Offscreen
-  refreshRuntimeState();
 }
 
-function updateAudibleBadge(isAudible) {
-  if (isAudible) {
-    currentTabAudibleEl.textContent = 'Audible';
-    currentTabAudibleEl.classList.add('active');
-  } else {
-    currentTabAudibleEl.textContent = 'Silent';
-    currentTabAudibleEl.classList.remove('active');
+/**
+ * Full refresh: queries SW coordinator snapshot and browser tabs
+ */
+async function refreshAll() {
+  await Promise.all([
+    queryCoordinatorSnapshot(),
+    refreshDetectedTabs()
+  ]);
+  renderUI();
+}
+
+/**
+ * Fetch Coordinator state snapshot from Service Worker
+ */
+async function queryCoordinatorSnapshot() {
+  try {
+    const res = await chrome.runtime.sendMessage(createMessage(
+      MessageTypes.GET_COORDINATOR_SNAPSHOT,
+      MessageTargets.SERVICE_WORKER
+    ));
+
+    if (res && res.globalSettings) {
+      currentSnapshot = res;
+    }
+  } catch (err) {
+    logger.warn('Failed to get coordinator snapshot, trying fallback QUERY_RUNTIME_STATE', { error: err.message });
+    try {
+      const fallback = await chrome.runtime.sendMessage(createMessage(
+        MessageTypes.QUERY_RUNTIME_STATE,
+        MessageTargets.SERVICE_WORKER
+      ));
+      if (fallback && fallback.globalSettings) {
+        currentSnapshot = fallback;
+      }
+    } catch (_) {}
   }
 }
 
-async function handleEnableCapture() {
-  if (!currentTab) return;
-  btnEnableCapture.disabled = true;
-  logger.info('User requested capture start', { tabId: currentTab.id });
+/**
+ * Query browser for audible tabs and active tab
+ */
+async function refreshDetectedTabs() {
+  try {
+    const [audibleTabs, activeTabs] = await Promise.all([
+      chrome.tabs.query({ audible: true }),
+      chrome.tabs.query({ active: true, currentWindow: true })
+    ]);
+
+    if (activeTabs && activeTabs.length > 0) {
+      activeTabInfo = activeTabs[0];
+    }
+
+    // Combine audible tabs and the current active tab
+    const tabMap = new Map();
+    (audibleTabs || []).forEach((t) => tabMap.set(t.id, t));
+    if (activeTabInfo && !tabMap.has(activeTabInfo.id)) {
+      tabMap.set(activeTabInfo.id, activeTabInfo);
+    }
+
+    detectedAudibleTabs = Array.from(tabMap.values());
+  } catch (err) {
+    logger.warn('Failed to query browser tabs', { error: err.message });
+  }
+}
+
+/**
+ * Render all UI components
+ */
+function renderUI() {
+  renderMasterControls();
+  renderManagedTabs();
+  renderDetectedTabs();
+}
+
+/**
+ * Render Master controls (Global toggle and Level Selector)
+ */
+function renderMasterControls() {
+  const isGlobalAuto = Boolean(currentSnapshot.globalSettings?.globalAutoEnabled);
+  btnGlobalAuto.setAttribute('aria-checked', isGlobalAuto ? 'true' : 'false');
+
+  const currentTarget = currentSnapshot.globalSettings?.globalTargetLufs ?? -18.0;
+  const activeLevel = getListeningLevelByTarget(currentTarget);
+
+  levelButtons.forEach((btn) => {
+    const isActive = btn.dataset.level === activeLevel.id;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+  });
+}
+
+/**
+ * Render Managed Tabs Card Deck
+ */
+function renderManagedTabs() {
+  const managedTabs = currentSnapshot.managedTabs || [];
+  managedCountBadge.textContent = String(managedTabs.length);
+
+  if (managedTabs.length === 0) {
+    managedTabsContainer.innerHTML = `
+      <div class="empty-state">
+        <p>No tabs currently under management.</p>
+        <p class="empty-hint">Select a detected tab below or right-click any page to balance its audio.</p>
+      </div>
+    `;
+    return;
+  }
+
+  managedTabsContainer.innerHTML = '';
+  managedTabs.forEach((tab) => {
+    const card = createManagedTabCard(tab);
+    managedTabsContainer.appendChild(card);
+  });
+}
+
+/**
+ * Create DOM card for a managed tab
+ */
+function createManagedTabCard(tab) {
+  const card = document.createElement('div');
+  card.className = 'tab-card';
+  card.id = `managed-card-${tab.tabId}`;
+
+  const status = presentTabStatus(tab);
+  const formattedManual = (tab.manualOffsetDb >= 0 ? '+' : '') + tab.manualOffsetDb.toFixed(1) + ' dB';
+  const formattedAuto = (tab.autoGainDb >= 0 ? '+' : '') + tab.autoGainDb.toFixed(1) + ' dB';
+  const formattedTotal = (tab.effectiveGainDb >= 0 ? '+' : '') + tab.effectiveGainDb.toFixed(1) + ' dB';
+
+  const faviconHtml = tab.favIconUrl
+    ? `<img class="tab-favicon" src="${escapeHtml(tab.favIconUrl)}" alt="" onerror="this.replaceWith(document.createTextNode('🔊'))" />`
+    : `<span class="tab-favicon-fallback" aria-hidden="true">🔊</span>`;
+
+  card.innerHTML = `
+    <div class="tab-header">
+      <div class="tab-identity">
+        ${faviconHtml}
+        <div class="tab-title-group">
+          <div class="tab-title" title="${escapeHtml(tab.title)}">${escapeHtml(tab.title || 'Untitled Tab')}</div>
+          <div class="tab-url" title="${escapeHtml(tab.url)}">${escapeHtml(formatDisplayUrl(tab.url))}</div>
+        </div>
+      </div>
+      <span class="status-badge ${status.badgeClass}" title="${escapeHtml(status.tooltip)}">${status.badgeText}</span>
+    </div>
+
+    <div class="tab-controls-block">
+      <div class="slider-group">
+        <div class="slider-header">
+          <label class="slider-label" for="slider-${tab.tabId}">Volume Adjustment</label>
+          <span class="gain-val-chip" id="val-${tab.tabId}">${formattedManual}</span>
+        </div>
+        <div class="slider-container" title="Double click to reset to 0 dB">
+          <input
+            type="range"
+            class="volume-slider"
+            id="slider-${tab.tabId}"
+            min="-12"
+            max="12"
+            step="0.5"
+            value="${tab.manualOffsetDb}"
+            aria-label="Volume adjustment for ${escapeHtml(tab.title)}"
+            aria-valuemin="-12"
+            aria-valuemax="12"
+            aria-valuenow="${tab.manualOffsetDb}"
+          />
+        </div>
+      </div>
+
+      <div class="tab-actions-row">
+        <label class="tab-auto-toggle">
+          <button
+            class="switch"
+            id="tab-auto-${tab.tabId}"
+            role="switch"
+            aria-checked="${tab.normalizationEnabled ? 'true' : 'false'}"
+            aria-label="Toggle auto balance for ${escapeHtml(tab.title)}"
+          >
+            <span class="switch-handle"></span>
+          </button>
+          <span>Auto Balance</span>
+        </label>
+
+        <div class="tab-gain-chips" title="Auto: ${formattedAuto} | Manual: ${formattedManual} | Effective Total: ${formattedTotal}">
+          <span class="gain-chip-item">Auto ${formattedAuto}</span>
+          <span class="gain-chip-item">Tot ${formattedTotal}</span>
+        </div>
+
+        <button class="btn btn-danger-outline" id="btn-release-${tab.tabId}" title="Stop balancing and return audio control to browser">
+          Release
+        </button>
+      </div>
+    </div>
+  `;
+
+  // Bind Card Interactions
+  const slider = card.querySelector(`#slider-${tab.tabId}`);
+  const valChip = card.querySelector(`#val-${tab.tabId}`);
+  const autoSwitch = card.querySelector(`#tab-auto-${tab.tabId}`);
+  const releaseBtn = card.querySelector(`#btn-release-${tab.tabId}`);
+
+  slider.addEventListener('pointerdown', () => { activeDragTabId = tab.tabId; });
+  slider.addEventListener('pointerup', () => { activeDragTabId = null; });
+
+  slider.addEventListener('input', (e) => {
+    const val = Number(e.target.value);
+    valChip.textContent = (val >= 0 ? '+' : '') + val.toFixed(1) + ' dB';
+    slider.setAttribute('aria-valuenow', String(val));
+    setTabManualOffset(tab.tabId, val);
+  });
+
+  // Double click resets to 0.0 dB
+  slider.addEventListener('dblclick', () => {
+    slider.value = '0';
+    valChip.textContent = '0.0 dB';
+    slider.setAttribute('aria-valuenow', '0');
+    setTabManualOffset(tab.tabId, 0);
+  });
+
+  autoSwitch.addEventListener('click', () => {
+    const next = !tab.normalizationEnabled;
+    autoSwitch.setAttribute('aria-checked', next ? 'true' : 'false');
+    setTabNormalization(tab.tabId, next);
+  });
+
+  releaseBtn.addEventListener('click', () => {
+    releaseBtn.disabled = true;
+    handleStopCapture(tab.tabId);
+  });
+
+  return card;
+}
+
+/**
+ * Render Detected / Audible Tabs Section
+ */
+function renderDetectedTabs() {
+  const managedTabIds = new Set((currentSnapshot.managedTabs || []).map((t) => t.tabId));
+  const unmanagedDetected = detectedAudibleTabs.filter((t) => !managedTabIds.has(t.id));
+
+  detectedCountBadge.textContent = String(unmanagedDetected.length);
+
+  if (unmanagedDetected.length === 0) {
+    detectedTabsContainer.innerHTML = `
+      <div class="empty-state">
+        <p>No other audible tabs found.</p>
+        <p class="empty-hint">Tabs playing sound will automatically appear here.</p>
+      </div>
+    `;
+    return;
+  }
+
+  detectedTabsContainer.innerHTML = '';
+  unmanagedDetected.forEach((tab) => {
+    const card = createDetectedTabCard(tab);
+    detectedTabsContainer.appendChild(card);
+  });
+}
+
+/**
+ * Create DOM card for a detected tab
+ */
+function createDetectedTabCard(tab) {
+  const card = document.createElement('div');
+  card.className = 'detected-card';
+  card.id = `detected-card-${tab.id}`;
+
+  const urlCheck = checkUrlSupport(tab.url);
+  const isSupported = urlCheck.supported;
+
+  const faviconHtml = tab.favIconUrl
+    ? `<img class="tab-favicon" src="${escapeHtml(tab.favIconUrl)}" alt="" onerror="this.replaceWith(document.createTextNode('🎵'))" />`
+    : `<span class="tab-favicon-fallback" aria-hidden="true">🎵</span>`;
+
+  card.innerHTML = `
+    <div class="tab-identity">
+      ${faviconHtml}
+      <div class="tab-title-group">
+        <div class="tab-title" title="${escapeHtml(tab.title)}">${escapeHtml(tab.title || 'Untitled Tab')}</div>
+        <div class="tab-url" title="${escapeHtml(tab.url)}">
+          ${isSupported ? escapeHtml(formatDisplayUrl(tab.url)) : `<span class="unsupported-note">${escapeHtml(urlCheck.reason)}</span>`}
+        </div>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-sm" id="btn-balance-${tab.id}" ${!isSupported ? 'disabled title="Cannot capture this page"' : ''}>
+      Balance
+    </button>
+  `;
+
+  if (isSupported) {
+    const btnBalance = card.querySelector(`#btn-balance-${tab.id}`);
+    btnBalance.addEventListener('click', () => {
+      btnBalance.disabled = true;
+      btnBalance.textContent = 'Connecting...';
+      handleStartCapture(tab.id);
+    });
+  }
+
+  return card;
+}
+
+/**
+ * Capture invocation
+ */
+async function handleStartCapture(tabId) {
+  logger.info('Initiating tab balance from popup', { tabId });
 
   try {
-    // Acquire stream ID directly within the user gesture context in popup
     let streamId = null;
     try {
       streamId = await new Promise((resolve, reject) => {
-        chrome.tabCapture.getMediaStreamId({ targetTabId: currentTab.id }, (id) => {
+        chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, (id) => {
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
           } else if (!id) {
-            reject(new Error('getMediaStreamId returned empty stream ID'));
+            reject(new Error('Empty stream ID received'));
           } else {
             resolve(id);
           }
         });
       });
-      logger.info('Stream ID acquired in popup user gesture', { tabId: currentTab.id, streamIdPresent: Boolean(streamId) });
+      logger.info('Acquired stream ID under popup gesture', { tabId, streamIdPresent: Boolean(streamId) });
     } catch (gestureErr) {
-      logger.warn('Could not acquire stream ID directly in popup, falling back to SW delegation', { error: gestureErr.message });
+      logger.warn('Could not acquire stream ID directly in popup, delegating to SW', { error: gestureErr.message });
     }
 
     const response = await chrome.runtime.sendMessage(createMessage(
       MessageTypes.START_CAPTURE,
       MessageTargets.SERVICE_WORKER,
-      { tabId: currentTab.id, streamId }
+      { tabId, streamId }
     ));
 
     if (response && response.success) {
-      logger.info('Capture request succeeded from SW', { tabId: currentTab.id });
+      logger.info('Start capture successfully processed', { tabId });
     } else {
-      logger.error('Capture request returned failure', response);
-      alert(`Capture failed: ${response?.error || 'Unknown error'}`);
+      logger.error('Start capture returned error', response);
+      alert(`Could not balance tab: ${response?.error || 'Unknown error'}`);
     }
   } catch (err) {
-    logger.error('Error invoking START_CAPTURE', { error: err.message });
-    alert(`Capture invocation error: ${err.message}`);
+    logger.error('handleStartCapture exception', { error: err.message });
+    alert(`Balance tab failed: ${err.message}`);
   } finally {
-    setTimeout(refreshRuntimeState, 300);
+    setTimeout(refreshAll, 300);
   }
 }
 
-async function handleStopCapture() {
-  if (!currentTab) return;
-  btnStopCapture.disabled = true;
-  logger.info('User requested capture stop', { tabId: currentTab.id });
-
+/**
+ * Stop capture invocation
+ */
+async function handleStopCapture(tabId) {
+  logger.info('Stopping tab balance from popup', { tabId });
   try {
     await chrome.runtime.sendMessage(createMessage(
       MessageTypes.STOP_CAPTURE,
       MessageTargets.SERVICE_WORKER,
-      { tabId: currentTab.id }
+      { tabId }
     ));
   } catch (err) {
-    logger.error('Error invoking STOP_CAPTURE', { error: err.message });
+    logger.error('handleStopCapture exception', { error: err.message });
   } finally {
-    setTimeout(refreshRuntimeState, 300);
+    setTimeout(refreshAll, 300);
   }
 }
 
-async function setGain(gainDb) {
-  if (!currentTab) return;
-  gainSlider.value = gainDb;
-  gainValueDisplay.textContent = `${gainDb > 0 ? '+' : ''}${gainDb} dB`;
+/**
+ * Global Auto Toggle
+ */
+async function setGlobalAuto(enabled) {
+  currentSnapshot.globalSettings.globalAutoEnabled = enabled;
+  renderMasterControls();
 
-  logger.info('Sending SET_TEST_GAIN', { tabId: currentTab.id, gainDb });
+  logger.info('Setting global auto balance', { enabled });
   try {
     await chrome.runtime.sendMessage(createMessage(
-      MessageTypes.SET_TEST_GAIN,
+      MessageTypes.SET_GLOBAL_AUTO,
       MessageTargets.SERVICE_WORKER,
-      { tabId: currentTab.id, gainDb }
+      { enabled }
     ));
   } catch (err) {
-    logger.error('Failed to send SET_TEST_GAIN', { error: err.message });
+    logger.error('Failed to set global auto', { error: err.message });
   }
 }
 
-async function refreshRuntimeState() {
+/**
+ * Listening Level
+ */
+async function setListeningLevel(targetLufs) {
+  currentSnapshot.globalSettings.globalTargetLufs = targetLufs;
+  renderMasterControls();
+
+  logger.info('Setting listening level target', { targetLufs });
   try {
-    const res = await chrome.runtime.sendMessage(createMessage(
-      MessageTypes.QUERY_RUNTIME_STATE,
-      MessageTargets.SERVICE_WORKER
+    await chrome.runtime.sendMessage(createMessage(
+      MessageTypes.SET_GLOBAL_TARGET,
+      MessageTargets.SERVICE_WORKER,
+      { targetLufs }
     ));
-
-    if (res && Array.isArray(res.activeStreams)) {
-      activeSessions = res.activeStreams;
-      renderStreams();
-      updateCurrentTabControls();
-    }
   } catch (err) {
-    logger.warn('Failed to query runtime state', { error: err.message });
+    logger.error('Failed to set global target LUFS', { error: err.message });
   }
 }
 
-function updateCurrentTabControls() {
-  if (!currentTab) return;
-  const isCaptured = activeSessions.some((s) => s.tabId === currentTab.id && s.captureStatus === 'RUNNING');
-  btnEnableCapture.disabled = isCaptured;
-  btnStopCapture.disabled = !isCaptured;
+/**
+ * Per-Tab Manual Offset
+ */
+let debounceOffsetTimers = new Map();
+function setTabManualOffset(tabId, offsetDb) {
+  // Update local snapshot immediately
+  const tab = currentSnapshot.managedTabs?.find((t) => t.tabId === tabId);
+  if (tab) {
+    tab.manualOffsetDb = offsetDb;
+    tab.effectiveGainDb = tab.autoGainDb + offsetDb;
+  }
 
-  const currentSession = activeSessions.find((s) => s.tabId === currentTab.id);
-  if (currentSession) {
-    gainSlider.value = currentSession.testGainDb;
-    gainValueDisplay.textContent = `${currentSession.testGainDb > 0 ? '+' : ''}${currentSession.testGainDb} dB`;
+  // Debounce sending to audio plane to avoid IPC spam during rapid slider dragging
+  if (debounceOffsetTimers.has(tabId)) {
+    clearTimeout(debounceOffsetTimers.get(tabId));
+  }
+
+  debounceOffsetTimers.set(tabId, setTimeout(async () => {
+    try {
+      await chrome.runtime.sendMessage(createMessage(
+        MessageTypes.SET_TEST_GAIN,
+        MessageTargets.SERVICE_WORKER,
+        { tabId, gainDb: offsetDb }
+      ));
+    } catch (err) {
+      logger.error('Failed to send SET_TEST_GAIN', { tabId, error: err.message });
+    }
+  }, 40));
+}
+
+/**
+ * Per-Tab Auto Balance Toggle
+ */
+async function setTabNormalization(tabId, enabled) {
+  const tab = currentSnapshot.managedTabs?.find((t) => t.tabId === tabId);
+  if (tab) {
+    tab.normalizationEnabled = enabled;
+    // Re-render card status badge
+    const card = document.getElementById(`managed-card-${tabId}`);
+    if (card) {
+      const badge = card.querySelector('.status-badge');
+      if (badge) {
+        const status = presentTabStatus(tab);
+        badge.className = `status-badge ${status.badgeClass}`;
+        badge.textContent = status.badgeText;
+        badge.title = status.tooltip;
+      }
+    }
+  }
+
+  logger.info('Setting tab normalization toggle', { tabId, enabled });
+  try {
+    await chrome.runtime.sendMessage(createMessage(
+      MessageTypes.SET_NORMALIZATION,
+      MessageTargets.SERVICE_WORKER,
+      { tabId, normalizationEnabled: enabled }
+    ));
+  } catch (err) {
+    logger.error('Failed to set tab normalization', { tabId, error: err.message });
   }
 }
 
-function renderStreams() {
-  if (!activeSessions || activeSessions.length === 0) {
-    activeStreamsContainer.innerHTML = '<div class="empty-hint">No active capture sessions</div>';
-    return;
+/**
+ * Real-time Runtime Telemetry Update
+ */
+function handleMetricsUpdate(metrics) {
+  if (!metrics || !metrics.tabId) return;
+
+  const tab = currentSnapshot.managedTabs?.find((t) => t.tabId === metrics.tabId);
+  if (tab) {
+    Object.assign(tab, metrics);
+
+    const card = document.getElementById(`managed-card-${metrics.tabId}`);
+    if (card) {
+      // Update badge
+      const badge = card.querySelector('.status-badge');
+      if (badge) {
+        const status = presentTabStatus(tab);
+        badge.className = `status-badge ${status.badgeClass}`;
+        badge.textContent = status.badgeText;
+        badge.title = status.tooltip;
+      }
+
+      // Update gain chips
+      const chipsContainer = card.querySelector('.tab-gain-chips');
+      if (chipsContainer) {
+        const formattedManual = (tab.manualOffsetDb >= 0 ? '+' : '') + tab.manualOffsetDb.toFixed(1) + ' dB';
+        const formattedAuto = (tab.autoGainDb >= 0 ? '+' : '') + tab.autoGainDb.toFixed(1) + ' dB';
+        const formattedTotal = (tab.effectiveGainDb >= 0 ? '+' : '') + tab.effectiveGainDb.toFixed(1) + ' dB';
+        chipsContainer.innerHTML = `
+          <span class="gain-chip-item">Auto ${formattedAuto}</span>
+          <span class="gain-chip-item">Tot ${formattedTotal}</span>
+        `;
+        chipsContainer.title = `Auto: ${formattedAuto} | Manual: ${formattedManual} | Effective Total: ${formattedTotal}`;
+      }
+
+      // Update slider if user is not actively dragging it
+      if (activeDragTabId !== metrics.tabId) {
+        const slider = card.querySelector(`#slider-${metrics.tabId}`);
+        const valChip = card.querySelector(`#val-${metrics.tabId}`);
+        if (slider && Math.abs(Number(slider.value) - tab.manualOffsetDb) > 0.05) {
+          slider.value = String(tab.manualOffsetDb);
+          if (valChip) {
+            valChip.textContent = (tab.manualOffsetDb >= 0 ? '+' : '') + tab.manualOffsetDb.toFixed(1) + ' dB';
+          }
+        }
+      }
+    }
   }
-
-  activeStreamsContainer.innerHTML = '';
-  activeSessions.forEach((s) => {
-    const card = document.createElement('div');
-    card.className = 'stream-card';
-    card.id = `stream-card-${s.tabId}`;
-
-    // Meter percentage calculation (-60 dBFS to 0 dBFS)
-    const meterPct = Math.max(0, Math.min(100, ((s.rmsDbFS + 60) / 60) * 100));
-
-    card.innerHTML = `
-      <div class="stream-card-header">
-        <strong>Tab ${s.tabId}</strong>
-        <span class="status-tag ${s.captureStatus === 'RUNNING' ? 'active' : ''}">${s.captureStatus}</span>
-      </div>
-      <div class="stream-meter">
-        <div class="stream-meter-bar" id="meter-bar-${s.tabId}" style="width: ${meterPct}%"></div>
-      </div>
-      <div class="stream-meta-row">
-        <span>Level: <span id="level-val-${s.tabId}">${s.rmsDbFS} dBFS</span></span>
-        <span>Gain: ${s.testGainDb > 0 ? '+' : ''}${s.testGainDb} dB</span>
-      </div>
-      <div class="stream-meta-row" style="margin-top: 4px;">
-        <span>Ctx: ${s.audioContextState}</span>
-        <span>Track: ${s.trackReadyState}</span>
-      </div>
-    `;
-    activeStreamsContainer.appendChild(card);
-  });
 }
 
-function renderExistingLogs() {
+/**
+ * Diagnostics and Logging
+ */
+function renderLogs() {
+  if (!diagnosticsLog) return;
   const logs = getStoredLogs();
-  logViewer.innerHTML = '';
-  logs.forEach(appendLogToUI);
+  diagnosticsLog.innerHTML = '';
+  logs.forEach(appendLogToView);
 }
 
-function appendLogToUI(entry) {
-  if (!entry) return;
+function appendLogToView(entry) {
+  if (!diagnosticsLog || !entry) return;
   const line = document.createElement('div');
-  line.className = `log-line log-${entry.level}`;
-  const time = entry.timestamp ? entry.timestamp.split('T')[1].replace('Z', '') : '';
+  line.className = `diag-log-line diag-log-${entry.level}`;
+  const time = entry.timestamp ? entry.timestamp.split('T')[1]?.replace('Z', '') : '';
   line.textContent = `[${time}] [${entry.context}] ${entry.message} ${entry.data ? JSON.stringify(entry.data) : ''}`;
-  logViewer.appendChild(line);
-  logViewer.scrollTop = logViewer.scrollHeight;
+  diagnosticsLog.appendChild(line);
+  diagnosticsLog.scrollTop = diagnosticsLog.scrollHeight;
 }
 
-function handleClearLogs() {
+function handleClearDiagnosticsLogs() {
   clearStoredLogs();
-  logViewer.innerHTML = '';
+  if (diagnosticsLog) {
+    diagnosticsLog.innerHTML = '';
+  }
 }
 
-async function handleCopyReport() {
+async function handleCopyDiagnosticsReport() {
   const env = getBrowserInfo();
   const report = {
     generatedAt: new Date().toISOString(),
     environment: env,
-    activeSessions,
+    snapshot: currentSnapshot,
+    audibleTabs: detectedAudibleTabs.map((t) => ({ id: t.id, title: t.title, url: t.url, audible: t.audible })),
     logs: getStoredLogs()
   };
 
-  const text = JSON.stringify(report, null, 2);
   try {
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
     alert('Diagnostics report copied to clipboard!');
   } catch (err) {
-    logger.error('Failed to copy report to clipboard', { error: err.message });
+    logger.error('Failed to copy diagnostics report', { error: err.message });
   }
 }
 
-// Runtime Message Listener
+/**
+ * Formatting Utilities
+ */
+function formatDisplayUrl(rawUrl) {
+  if (!rawUrl) return '';
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.hostname + (parsed.pathname !== '/' ? parsed.pathname : '');
+  } catch (_) {
+    return rawUrl;
+  }
+}
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
+ * Chrome Runtime Message Dispatcher
+ */
 chrome.runtime.onMessage.addListener((message) => {
   if (!message) return;
   const { type, payload } = message;
@@ -281,33 +693,26 @@ chrome.runtime.onMessage.addListener((message) => {
   switch (type) {
     case MessageTypes.LOG_ENTRY:
       if (payload && payload.entry) {
-        appendLogToUI(payload.entry);
-      }
-      break;
-
-    case MessageTypes.RUNTIME_STATE:
-      if (payload && payload.activeStreams) {
-        activeSessions = payload.activeStreams;
-        renderStreams();
-        updateCurrentTabControls();
+        appendLogToView(payload.entry);
       }
       break;
 
     case MessageTypes.METRICS_UPDATE:
-      if (payload && payload.tabId) {
-        const levelValEl = document.getElementById(`level-val-${payload.tabId}`);
-        const meterBarEl = document.getElementById(`meter-bar-${payload.tabId}`);
-        if (levelValEl) levelValEl.textContent = `${payload.rmsDbFS} dBFS`;
-        if (meterBarEl) {
-          const pct = Math.max(0, Math.min(100, ((payload.rmsDbFS + 60) / 60) * 100));
-          meterBarEl.style.width = `${pct}%`;
-        }
+      handleMetricsUpdate(payload);
+      break;
+
+    case MessageTypes.COORDINATOR_SNAPSHOT:
+    case MessageTypes.RUNTIME_STATE:
+      if (payload) {
+        currentSnapshot = payload;
+        renderUI();
       }
       break;
 
-    case MessageTypes.CAPTURE_STOPPED:
     case MessageTypes.CAPTURE_STARTED:
-      refreshRuntimeState();
+    case MessageTypes.CAPTURE_STOPPED:
+    case MessageTypes.CAPTURE_ERROR:
+      setTimeout(refreshAll, 150);
       break;
 
     default:
@@ -315,5 +720,5 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 });
 
-// Run init
+// Run Init
 init();

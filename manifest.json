@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "WebAudioBalance (P0 Feasibility PoC)",
+  "name": "WebAudioBalance",
   "version": "0.1.0",
-  "description": "Feasibility testing harness for cross-browser audio capture and processing in Chrome and Edge (Manifest V3)",
+  "description": "Smart tab loudness normalizer and perceptual balance across browser tabs (Manifest V3)",
   "permissions": [
     "tabCapture",
     "offscreen",
@@ -16,7 +16,7 @@
   },
   "action": {
     "default_popup": "src/popup/popup.html",
-    "default_title": "WebAudioBalance P0 PoC"
+    "default_title": "WebAudioBalance"
   },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw2W3TbqInkwLXjOo5BLaMBk0Pw0GpXHoDiCgQ8D/fpNl7WjR5Z7h3OCeCYekYaUF9TZVp76xDI+dkPPYUaFPGKtznu27CboMsMQ8mNemLtX7nTcuPG6UiaOfdE39KveBvZXB7sGt/+4tNInZg7YB34Ck8wQBGISa+vRU//TiXQiOOicYa5N6xmqJS94/3lnX+Zf6CuaxZ651ybAClHkoXw4BovVr8xWf8e5niLao0576DF1gfvD3zCMrKFZ/a6eeAZ0ZvydjrHCKAWKxesK8RQwUW7t4xlX0tRYXq6j5luvB0SiHkqOn7RPYshSgSepqba0gZfPBnK0dbHfh4iOUHQIDAQAB"
 }

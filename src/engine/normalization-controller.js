@@ -1,7 +1,7 @@
 /**
  * WebAudioBalance - NormalizationController
  * Desired-gain normalization controller with asymmetric convergence,
- * deadband stability, silence gating, headroom/safety bounding, and relative target semantics.
+ * deadband stability, silence gating, hard headroom/safety bounding, and relative target semantics.
  */
 
 export class NormalizationController {
@@ -27,12 +27,15 @@ export class NormalizationController {
     this.normalizationEnabled = options.enabled ?? options.normalizationEnabled ?? true;
 
     // Controller state variables
+    this.candidateAutoGainDb = 0.0;
     this.desiredAutoGainDb = 0.0;
     this.appliedAutoGainDb = 0.0;
     this.stableTargetAutoGainDb = 0.0;
     this.requestedTotalGainDb = 0.0;
     this.appliedGainDb = 0.0;
     this.gainErrorDb = 0.0;
+
+    this.lastSafeMaxGainDb = this.maxGainDb;
 
     this.isFrozen = false;
     this.isLimited = false;
@@ -46,9 +49,11 @@ export class NormalizationController {
   }
 
   set autoGainDb(val) {
-    this.appliedAutoGainDb = Number(val) || 0.0;
-    this.stableTargetAutoGainDb = this.appliedAutoGainDb;
-    this.appliedGainDb = Math.max(this.minGainDb, Math.min(this.maxGainDb, this.appliedAutoGainDb + this.relativeOffsetDb));
+    const num = Number(val) || 0.0;
+    this.appliedAutoGainDb = num;
+    this.candidateAutoGainDb = num;
+    this.stableTargetAutoGainDb = num;
+    this.appliedGainDb = Math.max(this.minGainDb, Math.min(this.maxGainDb, num + this.relativeOffsetDb));
   }
 
   get manualOffsetDb() {
@@ -70,9 +75,29 @@ export class NormalizationController {
   }
 
   setManualOffsetDb(offsetDb) {
-    if (typeof offsetDb === 'number' && !isNaN(offsetDb)) {
+    if (typeof offsetDb !== 'number' || isNaN(offsetDb)) return;
+
+    if (offsetDb <= this.relativeOffsetDb) {
+      // Negative or equal change reduces or maintains gain -> safe immediately
       this.relativeOffsetDb = offsetDb;
       this.appliedGainDb = Math.max(this.minGainDb, Math.min(this.maxGainDb, this.appliedAutoGainDb + this.relativeOffsetDb));
+      this.requestedTotalGainDb = this.candidateAutoGainDb + this.relativeOffsetDb;
+    } else {
+      // Positive offset change: MUST NOT bypass latest safety envelope
+      const maxAllowed = Math.min(this.maxGainDb, this.lastSafeMaxGainDb ?? this.maxGainDb);
+      const requestedTotal = this.appliedAutoGainDb + offsetDb;
+      this.relativeOffsetDb = offsetDb;
+      this.requestedTotalGainDb = requestedTotal;
+
+      if (requestedTotal > maxAllowed) {
+        this.appliedGainDb = maxAllowed;
+        this.appliedAutoGainDb = this.appliedGainDb - this.relativeOffsetDb;
+        this.candidateAutoGainDb = this.appliedAutoGainDb;
+        this.isLimited = true;
+        this.limitReason = (this.lastSafeMaxGainDb ?? this.maxGainDb) < this.maxGainDb ? 'headroom' : 'maxGain';
+      } else {
+        this.appliedGainDb = Math.max(this.minGainDb, requestedTotal);
+      }
     }
   }
 
@@ -85,6 +110,7 @@ export class NormalizationController {
     if (!this.normalizationEnabled) {
       this.desiredAutoGainDb = 0.0;
       this.appliedAutoGainDb = 0.0;
+      this.candidateAutoGainDb = 0.0;
       this.stableTargetAutoGainDb = 0.0;
       this.appliedGainDb = Math.max(this.minGainDb, Math.min(this.maxGainDb, this.relativeOffsetDb));
       this.isLimited = false;
@@ -129,6 +155,7 @@ export class NormalizationController {
     if (!this.normalizationEnabled) {
       this.desiredAutoGainDb = 0.0;
       this.appliedAutoGainDb = 0.0;
+      this.candidateAutoGainDb = 0.0;
       this.stableTargetAutoGainDb = 0.0;
       this.requestedTotalGainDb = this.relativeOffsetDb;
       this.appliedGainDb = Math.max(this.minGainDb, Math.min(this.maxGainDb, this.relativeOffsetDb));
@@ -175,58 +202,66 @@ export class NormalizationController {
       }
     }
 
-    // 4. Compute desired auto gain (feed-forward target error)
+    // 4. Compute normal feed-forward target auto gain
     const rawAutoGain = this.globalTargetLufs - controlLufs;
     this.desiredAutoGainDb = Math.max(this.minAutoGainDb, Math.min(this.maxAutoGainDb, rawAutoGain));
-
     this.requestedTotalGainDb = this.desiredAutoGainDb + this.relativeOffsetDb;
 
-    // 5. Headroom & Peak Safety Constraint (Section 9.2)
+    // 5. Compute Hard Safe Maximum Gain (Headroom Envelope)
     const safeHeadroomGain = this.outputCeilingDbFS - this.peakMarginDb - samplePeakDbFS;
     const maxSafeGainDb = Math.min(this.maxGainDb, safeHeadroomGain);
+    this.lastSafeMaxGainDb = safeHeadroomGain;
 
-    let constrainedTotalTargetGain = this.requestedTotalGainDb;
-    this.isLimited = false;
-    this.limitReason = null;
-
-    if (this.requestedTotalGainDb > maxSafeGainDb) {
-      constrainedTotalTargetGain = maxSafeGainDb;
-      this.isLimited = true;
-      this.limitReason = safeHeadroomGain < this.maxGainDb ? 'headroom' : 'maxGain';
-    } else if (this.requestedTotalGainDb < this.minGainDb) {
-      constrainedTotalTargetGain = this.minGainDb;
-      this.isLimited = true;
-      this.limitReason = 'minGain';
+    // 6. Deadband on normal target updates: prevent hunting from micro-fluctuations
+    if (Math.abs(this.desiredAutoGainDb - this.stableTargetAutoGainDb) > this.deadbandDb) {
+      this.stableTargetAutoGainDb = this.desiredAutoGainDb;
     }
 
-    const constrainedAutoGain = constrainedTotalTargetGain - this.relativeOffsetDb;
-
-    // 6. Deadband on target updates: prevent hunting from micro-fluctuations
-    if (Math.abs(constrainedAutoGain - this.stableTargetAutoGainDb) > this.deadbandDb) {
-      this.stableTargetAutoGainDb = constrainedAutoGain;
-    }
-
-    // 7. Smooth applied auto gain toward stableTargetAutoGainDb with asymmetric rates
-    const diff = this.stableTargetAutoGainDb - this.appliedAutoGainDb;
+    // 7. Smooth candidate auto gain toward stableTargetAutoGainDb with asymmetric rates
+    const diff = this.stableTargetAutoGainDb - this.candidateAutoGainDb;
 
     if (Math.abs(diff) > 1e-4) {
       if (diff < 0) {
         // Attenuate fast
         const maxStep = this.attackRateDbPerSec * dt;
         const step = Math.max(diff, -maxStep);
-        this.appliedAutoGainDb += step;
+        this.candidateAutoGainDb += step;
       } else {
         // Amplify gently
         const maxStep = this.releaseRateDbPerSec * dt;
         const step = Math.min(diff, maxStep);
-        this.appliedAutoGainDb += step;
+        this.candidateAutoGainDb += step;
       }
     } else {
-      this.appliedAutoGainDb = this.stableTargetAutoGainDb;
+      this.candidateAutoGainDb = this.stableTargetAutoGainDb;
     }
 
-    this.appliedAutoGainDb = Math.max(this.minAutoGainDb, Math.min(this.maxAutoGainDb, this.appliedAutoGainDb));
-    this.appliedGainDb = Math.max(this.minGainDb, Math.min(this.maxGainDb, this.appliedAutoGainDb + this.relativeOffsetDb));
+    this.candidateAutoGainDb = Math.max(this.minAutoGainDb, Math.min(this.maxAutoGainDb, this.candidateAutoGainDb));
+
+    // 8. HARD ENVELOPE ENFORCEMENT:
+    // Total candidate gain before safety clamp
+    const candidateTotalGainDb = this.candidateAutoGainDb + this.relativeOffsetDb;
+
+    if (candidateTotalGainDb > maxSafeGainDb) {
+      // Hard headroom / maxGain clamp: immediately applied!
+      this.appliedGainDb = maxSafeGainDb;
+      this.appliedAutoGainDb = this.appliedGainDb - this.relativeOffsetDb;
+      // Sync candidate state so later relaxation grows only via normal slow release rate
+      this.candidateAutoGainDb = this.appliedAutoGainDb;
+      this.isLimited = true;
+      this.limitReason = safeHeadroomGain < this.maxGainDb ? 'headroom' : 'maxGain';
+    } else if (candidateTotalGainDb < this.minGainDb) {
+      this.appliedGainDb = this.minGainDb;
+      this.appliedAutoGainDb = this.appliedGainDb - this.relativeOffsetDb;
+      this.candidateAutoGainDb = this.appliedAutoGainDb;
+      this.isLimited = true;
+      this.limitReason = 'minGain';
+    } else {
+      this.appliedGainDb = candidateTotalGainDb;
+      this.appliedAutoGainDb = this.candidateAutoGainDb;
+      this.isLimited = false;
+      this.limitReason = null;
+    }
 
     this.gainErrorDb = effectiveTargetLufs - (controlLufs + this.appliedGainDb);
 
@@ -236,8 +271,6 @@ export class NormalizationController {
   getState(errorDb = null, isFrozen = null) {
     const effectiveTargetLufs = this.globalTargetLufs + this.relativeOffsetDb;
     const frozen = isFrozen !== null ? isFrozen : this.isFrozen;
-    const computedGain = this.appliedAutoGainDb + this.relativeOffsetDb;
-    const gainDb = Math.max(this.minGainDb, Math.min(this.maxGainDb, computedGain));
     const finalError = errorDb !== null ? errorDb : this.gainErrorDb;
 
     return {
@@ -248,7 +281,7 @@ export class NormalizationController {
       desiredAutoGainDb: Number(this.desiredAutoGainDb.toFixed(2)),
       appliedAutoGainDb: Number(this.appliedAutoGainDb.toFixed(2)),
       requestedTotalGainDb: Number(this.requestedTotalGainDb.toFixed(2)),
-      appliedGainDb: Number(gainDb.toFixed(2)),
+      appliedGainDb: Number(this.appliedGainDb.toFixed(2)),
       gainErrorDb: Number(finalError.toFixed(2)),
       isFrozen: frozen,
       isLimited: this.isLimited,
@@ -258,7 +291,7 @@ export class NormalizationController {
       // Compatibility aliases for legacy consumers
       autoGainDb: Number(this.appliedAutoGainDb.toFixed(2)),
       manualOffsetDb: Number(this.relativeOffsetDb.toFixed(2)),
-      effectiveGainDb: Number(gainDb.toFixed(2)),
+      effectiveGainDb: Number(this.appliedGainDb.toFixed(2)),
       targetLufs: Number(this.globalTargetLufs.toFixed(1)),
       errorDb: Number(finalError.toFixed(2)),
       enabled: this.normalizationEnabled
@@ -266,12 +299,14 @@ export class NormalizationController {
   }
 
   reset() {
+    this.candidateAutoGainDb = 0.0;
     this.desiredAutoGainDb = 0.0;
     this.appliedAutoGainDb = 0.0;
     this.stableTargetAutoGainDb = 0.0;
     this.requestedTotalGainDb = 0.0;
     this.appliedGainDb = 0.0;
     this.gainErrorDb = 0.0;
+    this.lastSafeMaxGainDb = this.maxGainDb;
     this.isFrozen = false;
     this.isLimited = false;
     this.limitReason = null;

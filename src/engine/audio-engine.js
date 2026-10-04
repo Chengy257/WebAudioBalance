@@ -9,6 +9,7 @@ import { AudioEngineState, validateStateTransition } from './types.js';
 import { GainProcessor } from './gain-processor.js';
 import { SafetyHook } from './safety.js';
 import { LoudnessMeter } from './loudness-meter.js';
+import { EngineeringMeter } from './meter.js';
 import { ActivityDetector } from './activity-detector.js';
 import { NormalizationController } from './normalization-controller.js';
 
@@ -96,12 +97,17 @@ export class AudioEngine {
       this.gainProcessor = new GainProcessor(this.audioCtx, this.options.gainOptions);
       this.safetyHook = new SafetyHook(this.audioCtx, this.options.safetyOptions);
 
+      const channelCount = this.options.channelCount ?? 2;
+
       // Observation Branch 1: Continuous Input Loudness Meter
-      this.inputMeter = new LoudnessMeter(this.audioCtx, { isOutput: false, channelCount: 2 });
+      this.inputMeter = new LoudnessMeter(this.audioCtx, { isOutput: false, channelCount });
       this.loudnessMeter = this.inputMeter; // Compatibility alias
 
       // Observation Branch 2: Continuous Processed-Output Verification Meter
-      this.outputMeter = new LoudnessMeter(this.audioCtx, { isOutput: true, channelCount: 2 });
+      this.outputMeter = new LoudnessMeter(this.audioCtx, { isOutput: true, channelCount });
+
+      // Observation Branch 3: Diagnostic Engineering Meter (real RMS dBFS, non-authoritative)
+      this.engineeringMeter = new EngineeringMeter(this.audioCtx);
 
       // 5. Assemble Web Audio Graph:
       // Audible path: source -> GainProcessor -> SafetyHook -> destination
@@ -114,6 +120,9 @@ export class AudioEngine {
 
       // Observation branch 2: post-safety output -> outputMeter
       this.safetyHook.getOutputNode().connect(this.outputMeter.getNode());
+
+      // Observation branch 3: source -> engineeringMeter
+      this.sourceNode.connect(this.engineeringMeter.getNode());
 
       // 6. Start periodic control and metrics cycle (default 100ms)
       this.engineTimer = setInterval(() => {
@@ -156,9 +165,12 @@ export class AudioEngine {
     // 4. Update normalization controller
     const ctrlState = this.controller.update(inputMetrics, activity.isActive);
 
-    // 5. Apply effective gain to GainProcessor (smooth transition over 40ms)
+    // 5. Apply effective gain to GainProcessor (smooth transition, or short anti-click ramp on hard safety clamp)
     if (this.gainProcessor) {
-      this.gainProcessor.setGainDb(ctrlState.appliedGainDb, 0.04);
+      const currentGain = this.gainProcessor.getGainDb();
+      const isEmergencyClamp = ctrlState.isLimited && (ctrlState.appliedGainDb < currentGain - 1.5);
+      const rampTime = isEmergencyClamp ? 0.015 : 0.04;
+      this.gainProcessor.setGainDb(ctrlState.appliedGainDb, rampTime);
     }
 
     // 6. Read processed-output verification metrics
@@ -170,10 +182,13 @@ export class AudioEngine {
       samplePeakDbFS: -100
     };
 
+    // 7. Read diagnostic engineering levels (real RMS dBFS, non-authoritative)
+    const engMetrics = this.engineeringMeter ? this.engineeringMeter.measure() : { rmsDbFS: -100 };
+
     const outputTargetErrorLu = outputMetrics.shortTermValid ?
       Number((outputMetrics.shortTermLufs - ctrlState.effectiveTargetLufs).toFixed(1)) : null;
 
-    // 7. Broadcast comprehensive authoritative metrics
+    // 8. Broadcast comprehensive authoritative metrics
     const metricsPayload = {
       tabId: this.tabId,
 
@@ -210,11 +225,11 @@ export class AudioEngine {
       measurementSequence: inputMetrics.measurementSequence,
       audioContextState: this.audioCtx?.state || 'closed',
 
-      // Compatibility fields for legacy consumers
+      // Diagnostic & compatibility fields for legacy consumers
       momentaryLufs: inputMetrics.momentaryLufs,
       shortTermLufs: inputMetrics.shortTermLufs,
       peakDbFS: inputMetrics.samplePeakDbFS,
-      rmsDbFS: inputMetrics.shortTermLufs, // approximation alias for legacy rmsDbFS display
+      rmsDbFS: engMetrics.rmsDbFS, // Diagnostic real RMS dBFS, never LUFS
       autoGainDb: ctrlState.appliedAutoGainDb,
       manualOffsetDb: ctrlState.relativeOffsetDb,
       effectiveGainDb: ctrlState.appliedGainDb,
@@ -278,7 +293,10 @@ export class AudioEngine {
       this.safetyHook = null;
     }
 
-    this.engineeringMeter = null;
+    if (this.engineeringMeter) {
+      try { this.engineeringMeter.disconnect(); } catch (_) {}
+      this.engineeringMeter = null;
+    }
     this.kWeighting = null;
 
     if (this.source) {
@@ -351,6 +369,7 @@ export class AudioEngine {
       samplePeakDbFS: -100
     };
     const ctrlState = this.controller.getState();
+    const engMetrics = this.engineeringMeter ? this.engineeringMeter.getMetrics() : { rmsDbFS: -100 };
     const outputTargetErrorLu = outputMetrics.shortTermValid ?
       Number((outputMetrics.shortTermLufs - ctrlState.effectiveTargetLufs).toFixed(1)) : null;
 
@@ -386,11 +405,11 @@ export class AudioEngine {
       measurementSequence: inputMetrics.measurementSequence,
       audioContextState: this.audioCtx?.state || 'closed',
 
-      // Compatibility aliases
+      // Diagnostic & compatibility aliases
       momentaryLufs: inputMetrics.momentaryLufs,
       shortTermLufs: inputMetrics.shortTermLufs,
       peakDbFS: inputMetrics.samplePeakDbFS,
-      rmsDbFS: inputMetrics.shortTermLufs,
+      rmsDbFS: engMetrics.rmsDbFS, // Real RMS dBFS from EngineeringMeter
       autoGainDb: ctrlState.appliedAutoGainDb,
       manualOffsetDb: ctrlState.relativeOffsetDb,
       effectiveGainDb: ctrlState.appliedGainDb,

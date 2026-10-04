@@ -62,6 +62,8 @@ export class LoudnessMeter {
           channelCount: this.channelCount
         }
       });
+      this.workletNode.channelCount = this.channelCount;
+      this.workletNode.channelCountMode = 'explicit';
 
       this.workletNode.port.onmessage = (event) => {
         if (event.data?.type === 'measurement' && event.data.metrics) {

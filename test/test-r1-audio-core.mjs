@@ -427,6 +427,94 @@ async function runR1CoreTests() {
   }
 
   // =========================================================================
+  // Section 9: Hard Safety Envelope & Relative Offset Protections (R1 Closeout)
+  // =========================================================================
+  testSection('9. Hard Safety Envelope & Relative Offset Protections (R1 Closeout)');
+
+  {
+    // 9.1 Immediate drop when current gain is above newly reduced safety envelope
+    const ctrlSafety = new NormalizationController({
+      globalTargetLufs: -18.0,
+      outputCeilingDbFS: -1.0,
+      peakMarginDb: 1.0,
+      attackRateDbPerSec: 8.0,
+      releaseRateDbPerSec: 1.5,
+      deadbandDb: 0.1
+    });
+
+    // Establish +8.0 dB positive boost on quiet input (-26 LUFS)
+    for (let i = 0; i < 60; i++) {
+      ctrlSafety.update({
+        momentaryLufs: -26.0,
+        shortTermLufs: -26.0,
+        momentaryValid: true,
+        shortTermValid: true,
+        samplePeakDbFS: -23.0
+      }, true, 0.1);
+    }
+    const prePeakGain = ctrlSafety.getState().appliedGainDb;
+    assert(Math.abs(prePeakGain - 8.0) < 0.2, `Established positive boost: +${prePeakGain} dB`);
+
+    // Sudden dangerous peak arrives (-0.5 dBFS) -> hard safe maximum = -1.0 - 1.0 - (-0.5) = -1.5 dB!
+    // On the very next 0.1s step, gain MUST drop immediately to -1.5 dB (NOT only 8.0 - 0.8 = 7.2 dB!)
+    ctrlSafety.update({
+      momentaryLufs: -26.0,
+      shortTermLufs: -26.0,
+      momentaryValid: true,
+      shortTermValid: true,
+      samplePeakDbFS: -0.5
+    }, true, 0.1);
+
+    const clampedState = ctrlSafety.getState();
+    assert(clampedState.appliedGainDb <= -1.5, `Gain immediately hard-clamped to safe ceiling on step 1: ${clampedState.appliedGainDb} dB (<= -1.5 dB)`);
+    assert(clampedState.isLimited === true, 'Controller reports isLimited=true');
+    assert(clampedState.limitReason === 'headroom', `limitReason is correctly reported as "headroom" (observed: "${clampedState.limitReason}")`);
+
+    // 9.2 Safety relaxation grows only at slow release rate
+    // Peak subsides back to -23.0 dBFS (safe max is now +15 dB).
+    // Gain must grow upward from -1.5 dB at 1.5 dB/s, NOT jump back to +8.0 dB!
+    ctrlSafety.update({
+      momentaryLufs: -26.0,
+      shortTermLufs: -26.0,
+      momentaryValid: true,
+      shortTermValid: true,
+      samplePeakDbFS: -23.0
+    }, true, 1.0); // 1.0s elapsed
+
+    const relaxedState = ctrlSafety.getState();
+    const relaxedGrowth = relaxedState.appliedGainDb - clampedState.appliedGainDb;
+    assert(Math.abs(relaxedGrowth - 1.5) < 0.3, `Safety relaxation grew gently at release rate: +${relaxedGrowth.toFixed(2)} dB in 1s (~1.5 dB/s)`);
+
+    // 9.3 Positive relative offset does not bypass safety envelope
+    // Re-introduce peak of -1.0 dBFS -> safe max is -1.0 dB
+    ctrlSafety.update({
+      momentaryLufs: -26.0,
+      shortTermLufs: -26.0,
+      momentaryValid: true,
+      shortTermValid: true,
+      samplePeakDbFS: -1.0
+    }, true, 0.1);
+    assert(ctrlSafety.getState().appliedGainDb <= -1.0, 'Headroom constraint active at -1.0 dB');
+
+    // User attempts to add +6.0 dB relative offset
+    ctrlSafety.setRelativeOffsetDb(6.0);
+    const offsetAttemptState = ctrlSafety.getState();
+    assert(offsetAttemptState.appliedGainDb <= -1.0, `Positive relative offset did NOT bypass safety envelope (applied: ${offsetAttemptState.appliedGainDb} dB <= -1.0 dB)`);
+    assert(offsetAttemptState.isLimited === true, 'isLimited remains true after positive offset attempt under headroom limit');
+
+    // 9.4 Negative relative offset reduces gain immediately
+    ctrlSafety.setRelativeOffsetDb(-4.0);
+    const negOffsetState = ctrlSafety.getState();
+    assert(negOffsetState.appliedGainDb <= -4.0, `Negative relative offset immediately reduces gain: ${negOffsetState.appliedGainDb} dB`);
+
+    // 9.5 Internal gain field consistency
+    assert(
+      Math.abs(negOffsetState.appliedGainDb - (negOffsetState.appliedAutoGainDb + negOffsetState.relativeOffsetDb)) < 1e-4,
+      'Internal gain fields remain mutually consistent: appliedGainDb == appliedAutoGainDb + relativeOffsetDb'
+    );
+  }
+
+  // =========================================================================
   // Summary
   // =========================================================================
   console.log('\n=============================================');

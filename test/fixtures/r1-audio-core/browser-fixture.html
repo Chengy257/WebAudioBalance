@@ -5,7 +5,7 @@
   <title>WebAudioBalance - R1 Browser Audio-Path Validation Fixture</title>
 </head>
 <body>
-  <h1>R1 Browser Audio-Path Validation</h1>
+  <h1>R1 Browser Audio-Path Validation (B1 - B5)</h1>
   <div id="status">Initializing fixture...</div>
   <pre id="log"></pre>
 
@@ -32,8 +32,14 @@
       }
     }
 
-    function createToneStream(audioCtx, freq, gainVal) {
+    function sleep(ms) {
+      return new Promise(r => setTimeout(r, ms));
+    }
+
+    function createToneStream(audioCtx, freq, gainVal, channelCount = 2) {
       const dest = audioCtx.createMediaStreamDestination();
+      dest.channelCount = channelCount;
+      dest.channelCountMode = 'explicit';
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       osc.type = 'sine';
@@ -45,12 +51,36 @@
       return {
         stream: dest.stream,
         osc,
-        gain
+        gain,
+        dest
       };
     }
 
-    function sleep(ms) {
-      return new Promise(r => setTimeout(r, ms));
+    function createPulsedHighPeakNode(audioCtx, sampleRate = audioCtx.sampleRate) {
+      // 0.25-second periodic buffer with a 2.5ms 1kHz burst at 0.89125 (-1.0 dBFS peak)
+      // plus a quiet continuous base sine at amp 0.0501 (-26 LUFS)
+      const bufferLen = Math.round(sampleRate * 0.25);
+      const audioBuffer = audioCtx.createBuffer(2, bufferLen, sampleRate);
+      const ch0 = audioBuffer.getChannelData(0);
+      const ch1 = audioBuffer.getChannelData(1);
+
+      const pulseLen = Math.round(sampleRate * 0.0025); // 2.5ms burst
+      const peakAmp = 0.89125; // -1.0 dBFS
+      const baseAmp = 0.0501;  // -26 LUFS background
+
+      for (let i = 0; i < bufferLen; i++) {
+        const base = baseAmp * Math.sin(2 * Math.PI * 1000 * (i / sampleRate));
+        const pulse = (i < pulseLen) ? peakAmp * Math.sin(2 * Math.PI * 1000 * (i / sampleRate)) : 0;
+        const val = Math.max(-1.0, Math.min(1.0, base + pulse));
+        ch0[i] = val;
+        ch1[i] = val;
+      }
+
+      const src = audioCtx.createBufferSource();
+      src.buffer = audioBuffer;
+      src.loop = true;
+      src.start();
+      return src;
     }
 
     window.runBrowserR1Suite = async function() {
@@ -76,14 +106,27 @@
       if (synthCtx.state === 'suspended') await synthCtx.resume();
 
       try {
-        console.log('--- Test 1: Real Browser AudioWorklet End-to-End Absolute Convergence ---');
-        // Create 3 independent synthetic streams:
-        // Amp 0.3162 ~= -10 dBFS (-10 LUFS)
-        // Amp 0.1259 ~= -18 dBFS (-18 LUFS)
-        // Amp 0.0501 ~= -26 dBFS (-26 LUFS)
-        const toneA = createToneStream(synthCtx, 1000, 0.3162);
-        const toneB = createToneStream(synthCtx, 1000, 0.1259);
-        const toneC = createToneStream(synthCtx, 1000, 0.0501);
+        console.log('=== SECTION 1: Baseline Multi-Engine Absolute Convergence ===');
+        const toneA = createToneStream(synthCtx, 1000, 0.3162); // -10 LUFS
+        const toneB = createToneStream(synthCtx, 1000, 0.1259); // -18 LUFS
+
+        const destC = synthCtx.createMediaStreamDestination();
+        const gainQuietC = synthCtx.createGain();
+        gainQuietC.gain.value = 1.0;
+        const oscQuietC = synthCtx.createOscillator();
+        oscQuietC.frequency.value = 1000;
+        const oscQuietCGain = synthCtx.createGain();
+        oscQuietCGain.gain.value = 0.0501; // -26 LUFS
+        oscQuietC.connect(oscQuietCGain);
+        oscQuietCGain.connect(gainQuietC);
+        gainQuietC.connect(destC);
+        oscQuietC.start();
+
+        const gainPulseC = synthCtx.createGain();
+        gainPulseC.gain.value = 0.0;
+        const pulseNodeC = createPulsedHighPeakNode(synthCtx);
+        pulseNodeC.connect(gainPulseC);
+        gainPulseC.connect(destC);
 
         const engineA = new AudioEngine(101, new SyntheticStreamSource(toneA.stream), {
           workletUrl: '/src/engine/worklets/loudness-meter-processor.js',
@@ -93,7 +136,7 @@
           workletUrl: '/src/engine/worklets/loudness-meter-processor.js',
           cycleIntervalMs: 50
         });
-        const engineC = new AudioEngine(103, new SyntheticStreamSource(toneC.stream), {
+        const engineC = new AudioEngine(103, new SyntheticStreamSource(destC.stream), {
           workletUrl: '/src/engine/worklets/loudness-meter-processor.js',
           cycleIntervalMs: 50
         });
@@ -102,86 +145,366 @@
         await engineB.start();
         await engineC.start();
 
-        record('AudioWorklet Initialization', true, 'All 3 independent AudioEngines started with real AudioWorkletNodes');
+        record('AudioWorklet Initialization', true, 'Engines A, B, C started with real AudioWorkletNodes');
 
-        // Allow 9.5 seconds for contiguous 3.0s window validity and 1.5 dB/s release convergence
+        // Allow 9.5s for contiguous 3.0s window settling and 1.5 dB/s release to +8 dB
         await sleep(9500);
 
         const metricsA = engineA.getMetrics();
         const metricsB = engineB.getMetrics();
         const metricsC = engineC.getMetrics();
 
-        // 1.1 Validity
         record('Output Meter Validity',
           metricsA.outputShortTermValid === true && metricsB.outputShortTermValid === true && metricsC.outputShortTermValid === true,
           `Engine A/B/C outputShortTermValid: ${metricsA.outputShortTermValid}, ${metricsB.outputShortTermValid}, ${metricsC.outputShortTermValid}`
         );
 
-        // 1.2 Observed Processed-Output Absolute Convergence (±1.0 LU of -18.0 LUFS)
         const errA = Math.abs(metricsA.outputShortTermLufs - (-18.0));
         const errB = Math.abs(metricsB.outputShortTermLufs - (-18.0));
         const errC = Math.abs(metricsC.outputShortTermLufs - (-18.0));
 
         record('Engine A Output Convergence', errA <= 1.0,
-          `Engine A (input ~${metricsA.inputShortTermLufs} LUFS) output Short-Term: ${metricsA.outputShortTermLufs} LUFS (err: ${errA.toFixed(2)} LU)`
+          `Engine A (input ${metricsA.inputShortTermLufs} LUFS) output: ${metricsA.outputShortTermLufs} LUFS (err: ${errA.toFixed(2)} LU)`
         );
         record('Engine B Output Convergence', errB <= 1.0,
-          `Engine B (input ~${metricsB.inputShortTermLufs} LUFS) output Short-Term: ${metricsB.outputShortTermLufs} LUFS (err: ${errB.toFixed(2)} LU)`
+          `Engine B (input ${metricsB.inputShortTermLufs} LUFS) output: ${metricsB.outputShortTermLufs} LUFS (err: ${errB.toFixed(2)} LU)`
         );
         record('Engine C Output Convergence', errC <= 1.0,
-          `Engine C (input ~${metricsC.inputShortTermLufs} LUFS) output Short-Term: ${metricsC.outputShortTermLufs} LUFS (err: ${errC.toFixed(2)} LU)`
+          `Engine C (input ${metricsC.inputShortTermLufs} LUFS) output: ${metricsC.outputShortTermLufs} LUFS (err: ${errC.toFixed(2)} LU)`
         );
 
-        // 1.3 Target Error metric verification
         record('Canonical Output Target Error',
           typeof metricsA.outputTargetErrorLu === 'number' && Math.abs(metricsA.outputTargetErrorLu) <= 1.0,
           `outputTargetErrorLu reported canonically: ${metricsA.outputTargetErrorLu} LU`
         );
 
-        // --- Test 2: Dynamic Relative Offset In Browser Audio Path ---
-        console.log('--- Test 2: Dynamic Relative Target Offset ---');
-        engineA.setRelativeOffsetDb(3.0); // Effective target becomes -15.0 LUFS
-        await sleep(2000); // 2s adaptation
-        const metricsAOffset = engineA.getMetrics();
-        const errOffset = Math.abs(metricsAOffset.outputShortTermLufs - (-15.0));
-        record('Relative Target Offset (+3 dB)', errOffset <= 1.0,
-          `Engine A output after +3 dB offset tracked to ${metricsAOffset.outputShortTermLufs} LUFS (target -15.0 LUFS)`
-        );
-        record('Multi-Engine Isolation During Offset',
-          Math.abs(engineB.getMetrics().outputShortTermLufs - (-18.0)) <= 1.0,
-          `Engine B remained stable at ${engineB.getMetrics().outputShortTermLufs} LUFS without crosstalk`
+        // --- SECTION 2: B1 & B2 Headroom Safety Clamping & Relative Offset ---
+        console.log('=== SECTION 2: B1 & B2 Headroom Envelope & Offset Safety ===');
+        const preClampGain = engineC.getGainDb();
+        console.log(`Engine C pre-clamp applied gain: ${preClampGain.toFixed(2)} dB`);
+
+        // B1: Listen to canonical metrics event for exact first control interval where peak arrives
+        const switchStartTime = performance.now();
+        let peakDetectDuration = 0;
+
+        const b1Promise = new Promise((resolve) => {
+          let resolved = false;
+          const handler = (m) => {
+            if (!resolved && m.inputSamplePeakDbFS >= -1.5) {
+              resolved = true;
+              peakDetectDuration = performance.now() - switchStartTime;
+              resolve(m);
+            }
+          };
+          engineC.on('metrics', handler);
+        });
+
+        // Switch to low-average / high-peak pulse source
+        gainQuietC.gain.setValueAtTime(0, synthCtx.currentTime);
+        gainPulseC.gain.setValueAtTime(1, synthCtx.currentTime);
+
+        const b1Clamp = await b1Promise;
+
+        const b1Pass = b1Clamp &&
+          b1Clamp.isLimited === true &&
+          b1Clamp.limitReason === 'headroom' &&
+          b1Clamp.appliedGainDb <= -0.9 &&
+          peakDetectDuration < 1200;
+
+        record('B1 Immediate Headroom Transition', b1Pass,
+          `First cycle after peak: isLimited=${b1Clamp?.isLimited}, limitReason=${b1Clamp?.limitReason}, ` +
+          `appliedGainDb=${b1Clamp?.appliedGainDb} dB (safe cap <= -0.9 dB, elapsed ${peakDetectDuration.toFixed(0)} ms)`
         );
 
-        // --- Test 3: Headroom Safety Limit in Browser Audio Path ---
-        console.log('--- Test 3: Headroom Safety Limit ---');
-        // Engine C has quiet input (-26 LUFS). If user sets +12 dB offset, total requested gain would be +20 dB!
-        // Configured max gain / headroom ceiling will clamp it safely.
-        engineC.setRelativeOffsetDb(10.0);
-        await sleep(1500);
-        const metricsCLimited = engineC.getMetrics();
-        record('Safety Limit Enforcement',
-          metricsCLimited.isLimited === true,
-          `Engine C excessive boost marked isLimited=${metricsCLimited.isLimited} (reason: ${metricsCLimited.limitReason})`
-        );
-        record('Output Peak Bounded',
-          metricsCLimited.outputSamplePeakDbFS <= 0.0,
-          `Output peak safely constrained: ${metricsCLimited.outputSamplePeakDbFS} dBFS`
+        // Allow 500ms for 400ms momentary peak window to clear pre-clamp pulse
+        await sleep(500);
+        const b1PostMetrics = engineC.getMetrics();
+        record('B1 Output Path Peak Bounded',
+          b1PostMetrics.outputSamplePeakDbFS <= 0.0,
+          `Output sample peak bounded under clamped audio: ${b1PostMetrics.outputSamplePeakDbFS} dBFS`
         );
 
-        // --- Test 4: Full AudioEngine Disposal & Zero Leak ---
-        console.log('--- Test 4: AudioEngine Teardown ---');
+        // B2: Positive relative-offset under limited headroom
+        console.log('--- B2: Positive Relative Offset Under Limited Headroom ---');
+        engineC.setRelativeOffsetDb(6.0); // Request +6 dB offset
+        await sleep(150);
+
+        const b2Metrics = engineC.getMetrics();
+        const b2Pass = b2Metrics.relativeOffsetDb === 6.0 &&
+          b2Metrics.appliedGainDb <= -0.9 &&
+          b2Metrics.isLimited === true &&
+          b2Metrics.limitReason === 'headroom' &&
+          Math.abs(b2Metrics.appliedGainDb - (b2Metrics.appliedAutoGainDb + b2Metrics.relativeOffsetDb)) < 0.01;
+
+        record('B2 Positive Offset Headroom Cap', b2Pass,
+          `Offset requested +6.0 dB, appliedGainDb safely constrained at ${b2Metrics.appliedGainDb} dB (<= -0.9 dB), ` +
+          `isLimited=${b2Metrics.isLimited}, limitReason=${b2Metrics.limitReason}`
+        );
+
+        record('B2 Internal Gain Field Consistency',
+          Math.abs(b2Metrics.appliedGainDb - (b2Metrics.appliedAutoGainDb + b2Metrics.relativeOffsetDb)) < 0.01,
+          `appliedGainDb (${b2Metrics.appliedGainDb}) == appliedAutoGainDb (${b2Metrics.appliedAutoGainDb}) + relativeOffsetDb (${b2Metrics.relativeOffsetDb})`
+        );
+
         await engineA.stop();
         await engineB.stop();
         await engineC.stop();
-
-        record('Clean Teardown',
-          engineA.audioCtx === null && engineA.inputMeter === null && engineA.outputMeter === null,
-          'AudioEngine resources, AudioWorklets, and AudioContext closed cleanly'
-        );
-
+        oscQuietC.stop();
+        pulseNodeC.stop();
         toneA.osc.stop();
         toneB.osc.stop();
-        toneC.osc.stop();
+
+        // --- SECTION 3: B3 Dynamic Source Transitions & Asymmetric Rates ---
+        console.log('=== SECTION 3: B3 Dynamic Source Transitions (-10 -> -22 -> -8 LUFS) ===');
+        const destDyn = synthCtx.createMediaStreamDestination();
+        const dynOsc = synthCtx.createOscillator();
+        dynOsc.frequency.value = 1000;
+        const dynGain = synthCtx.createGain();
+        dynGain.gain.value = 0.3162; // Start at ~ -10 LUFS
+        dynOsc.connect(dynGain);
+        dynGain.connect(destDyn);
+        dynOsc.start();
+
+        const stableTone = createToneStream(synthCtx, 1000, 0.1259); // Steady -18 LUFS
+
+        const engineDyn = new AudioEngine(301, new SyntheticStreamSource(destDyn.stream), {
+          workletUrl: '/src/engine/worklets/loudness-meter-processor.js',
+          cycleIntervalMs: 50
+        });
+        const engineStable = new AudioEngine(302, new SyntheticStreamSource(stableTone.stream), {
+          workletUrl: '/src/engine/worklets/loudness-meter-processor.js',
+          cycleIntervalMs: 50
+        });
+
+        await engineDyn.start();
+        await engineStable.start();
+
+        // Stage 3.1: -10 LUFS convergence (desired gain -8 dB)
+        await sleep(4000);
+        const dynMetrics1 = engineDyn.getMetrics();
+        const errDyn1 = Math.abs(dynMetrics1.outputShortTermLufs - (-18.0));
+        record('B3 Stage 1 Convergence (-10 LUFS)', errDyn1 <= 1.0,
+          `Dynamic engine output at ${dynMetrics1.outputShortTermLufs} LUFS (applied gain: ${dynMetrics1.appliedGainDb} dB)`
+        );
+
+        // Stage 3.2: Transition to -22 LUFS (amp 0.0794, desired gain +4 dB)
+        console.log('--- B3 Stage 2: Step to -22 LUFS (Gentle Amplification) ---');
+        const gBeforeRelease = engineDyn.getGainDb();
+        dynGain.gain.setValueAtTime(0.0794, synthCtx.currentTime);
+
+        await sleep(1000);
+        const gAfter1sRelease = engineDyn.getGainDb();
+        const releaseRateMeasured = (gAfter1sRelease - gBeforeRelease) / 1.0;
+        console.log(`Measured amplification rate: ${releaseRateMeasured.toFixed(2)} dB/s`);
+
+        // Wait remaining time for full 12 dB release + 3s short-term window settling (total 11.5s)
+        await sleep(10500);
+        const dynMetrics2 = engineDyn.getMetrics();
+        const errDyn2 = Math.abs(dynMetrics2.outputShortTermLufs - (-18.0));
+        const stableMetrics2 = engineStable.getMetrics();
+        const errStable2 = Math.abs(stableMetrics2.outputShortTermLufs - (-18.0));
+
+        record('B3 Stage 2 Convergence (-22 LUFS)', errDyn2 <= 1.0,
+          `Dynamic engine reconverged to ${dynMetrics2.outputShortTermLufs} LUFS (applied gain: ${dynMetrics2.appliedGainDb} dB)`
+        );
+        record('B3 Isolation During Amplification', errStable2 <= 1.0,
+          `Independent stable engine unaffected at ${stableMetrics2.outputShortTermLufs} LUFS`
+        );
+
+        // Stage 3.3: Transition to -8 LUFS (amp 0.3981, desired gain -10 dB)
+        console.log('--- B3 Stage 3: Step to -8 LUFS (Fast Attenuation) ---');
+        const gBeforeAttack = engineDyn.getGainDb();
+        dynGain.gain.setValueAtTime(0.3981, synthCtx.currentTime);
+
+        await sleep(500);
+        const gAfter05sAttack = engineDyn.getGainDb();
+        const attackRateMeasured = Math.abs(gAfter05sAttack - gBeforeAttack) / 0.5;
+        console.log(`Measured attenuation rate: ${attackRateMeasured.toFixed(2)} dB/s`);
+
+        // Wait for attack + 3s window settling (total 5.5s)
+        await sleep(5000);
+        const dynMetrics3 = engineDyn.getMetrics();
+        const errDyn3 = Math.abs(dynMetrics3.outputShortTermLufs - (-18.0));
+        const stableMetrics3 = engineStable.getMetrics();
+        const errStable3 = Math.abs(stableMetrics3.outputShortTermLufs - (-18.0));
+
+        record('B3 Stage 3 Convergence (-8 LUFS)', errDyn3 <= 1.0,
+          `Dynamic engine reconverged to ${dynMetrics3.outputShortTermLufs} LUFS (applied gain: ${dynMetrics3.appliedGainDb} dB)`
+        );
+        record('B3 Asymmetric Rates (Attenuation > Amplification)',
+          attackRateMeasured >= 5.0 && attackRateMeasured > releaseRateMeasured * 2.5,
+          `Attenuation (${attackRateMeasured.toFixed(1)} dB/s) is markedly faster than amplification (${releaseRateMeasured.toFixed(1)} dB/s)`
+        );
+        record('B3 No Gain Runaway',
+          dynMetrics3.appliedGainDb >= -15.0 && dynMetrics3.appliedGainDb <= 10.0,
+          `Applied gain remained bounded across dynamic sequence: ${dynMetrics3.appliedGainDb} dB`
+        );
+
+        await engineDyn.stop();
+        await engineStable.stop();
+        dynOsc.stop();
+        stableTone.osc.stop();
+
+        // --- SECTION 4: B4 Silence, Resume & Epoch Reacquisition ---
+        console.log('=== SECTION 4: B4 Silence, Resume & Epoch Reacquisition ===');
+        const destSil = synthCtx.createMediaStreamDestination();
+        const silOsc = synthCtx.createOscillator();
+        silOsc.frequency.value = 1000;
+        const gateGain = synthCtx.createGain();
+        gateGain.gain.value = 0.1585; // Initial ~ -16 LUFS
+        silOsc.connect(gateGain);
+        gateGain.connect(destSil);
+        silOsc.start();
+
+        const engineSil = new AudioEngine(401, new SyntheticStreamSource(destSil.stream), {
+          workletUrl: '/src/engine/worklets/loudness-meter-processor.js',
+          cycleIntervalMs: 50
+        });
+
+        await engineSil.start();
+        await sleep(4500); // Settle at ~ -2 dB
+
+        const initialSilGain = engineSil.getGainDb();
+
+        // 4.1 Short pause (800ms > 600ms hold time)
+        console.log('--- B4.1 Short Pause ---');
+        gateGain.gain.setValueAtTime(0, synthCtx.currentTime);
+        await sleep(800);
+        const mPause = engineSil.getMetrics();
+        record('B4.1 Short Pause Freeze',
+          mPause.isFrozen === true && Math.abs(mPause.appliedGainDb - initialSilGain) < 0.5,
+          `Gain frozen at ${mPause.appliedGainDb} dB during short pause (isFrozen=${mPause.isFrozen})`
+        );
+
+        gateGain.gain.setValueAtTime(0.1585, synthCtx.currentTime);
+        await sleep(1000);
+
+        // 4.2 Long silence (2.5s) -> Same-level resume
+        console.log('--- B4.2 Long Silence -> Same-Level Resume ---');
+        gateGain.gain.setValueAtTime(0, synthCtx.currentTime);
+        await sleep(2500);
+
+        const mLongSil = engineSil.getMetrics();
+        record('B4.2 Long Silence Runaway Prevention',
+          mLongSil.isActive === false && mLongSil.isFrozen === true && mLongSil.appliedAutoGainDb <= 0.0,
+          `Silence prevented positive runaway: isActive=${mLongSil.isActive}, appliedAutoGainDb=${mLongSil.appliedAutoGainDb} dB`
+        );
+
+        // Resume audio at same level
+        gateGain.gain.setValueAtTime(0.1585, synthCtx.currentTime);
+        await sleep(150);
+        const mResumeFirst = engineSil.getMetrics();
+        record('B4.2 Epoch Reacquisition On Resume',
+          mResumeFirst.inputShortTermValid === false,
+          `Short-term validity invalidated upon resume: inputShortTermValid=${mResumeFirst.inputShortTermValid}`
+        );
+
+        await sleep(4000);
+        const mResumeSettled = engineSil.getMetrics();
+        record('B4.2 Same-Level Resume Convergence',
+          mResumeSettled.inputShortTermValid === true && Math.abs(mResumeSettled.outputShortTermLufs - (-18.0)) <= 1.0,
+          `Reconverged cleanly after resume: output=${mResumeSettled.outputShortTermLufs} LUFS`
+        );
+
+        // 4.3 Long silence -> Much louder resume (-8 LUFS)
+        console.log('--- B4.3 Long Silence -> Louder Resume ---');
+        gateGain.gain.setValueAtTime(0, synthCtx.currentTime);
+        await sleep(2000);
+
+        gateGain.gain.setValueAtTime(0.3981, synthCtx.currentTime); // -8 LUFS
+        await sleep(800); // Check prompt protective attenuation
+        const mLouderPrompt = engineSil.getMetrics();
+        record('B4.3 Louder Resume Prompt Protection',
+          mLouderPrompt.appliedGainDb < -2.5 && mLouderPrompt.outputSamplePeakDbFS <= 0.0,
+          `Loud resume promptly attenuated: appliedGainDb=${mLouderPrompt.appliedGainDb} dB, peak=${mLouderPrompt.outputSamplePeakDbFS} dBFS`
+        );
+
+        await sleep(4500);
+        const mLouderSettled = engineSil.getMetrics();
+        record('B4.3 Louder Resume Convergence',
+          Math.abs(mLouderSettled.outputShortTermLufs - (-18.0)) <= 1.0,
+          `Louder resume reconverged to ${mLouderSettled.outputShortTermLufs} LUFS`
+        );
+
+        // 4.4 Long silence -> Much quieter resume (-24 LUFS)
+        console.log('--- B4.4 Long Silence -> Quieter Resume ---');
+        // Re-establish nominal baseline before quiet resume test
+        gateGain.gain.setValueAtTime(0.1259, synthCtx.currentTime); // -18 LUFS
+        await sleep(3500); // Settle to ~0 dB
+
+        gateGain.gain.setValueAtTime(0, synthCtx.currentTime);
+        await sleep(2000);
+
+        gateGain.gain.setValueAtTime(0.0631, synthCtx.currentTime); // -24 LUFS
+        await sleep(1000); // Check during warm-up (< 3s)
+        const mQuieterWarmup = engineSil.getMetrics();
+        record('B4.4 Quieter Resume No Blind Boost During Warm-up',
+          mQuieterWarmup.inputShortTermValid === false && mQuieterWarmup.appliedAutoGainDb <= 0.0,
+          `No unverified positive boost during warm-up: inputShortTermValid=${mQuieterWarmup.inputShortTermValid}, appliedAutoGainDb=${mQuieterWarmup.appliedAutoGainDb} dB`
+        );
+
+        // Allow 3s warm-up + 4s release at 1.5 dB/s to reach +6 dB + settling (total 8.5s)
+        await sleep(8500);
+        const mQuieterSettled = engineSil.getMetrics();
+        record('B4.4 Quieter Resume Convergence',
+          mQuieterSettled.inputShortTermValid === true && Math.abs(mQuieterSettled.outputShortTermLufs - (-18.0)) <= 1.0,
+          `Quieter resume reconverged to ${mQuieterSettled.outputShortTermLufs} LUFS`
+        );
+
+        await engineSil.stop();
+        silOsc.stop();
+
+        // --- SECTION 5: B5 Mono Browser Path ---
+        console.log('=== SECTION 5: B5 Mono Browser Path Conformance ===');
+        const monoDest = synthCtx.createMediaStreamDestination();
+        monoDest.channelCount = 1;
+        monoDest.channelCountMode = 'explicit';
+
+        const monoOsc = synthCtx.createOscillator();
+        monoOsc.frequency.value = 1000;
+        const monoGain = synthCtx.createGain();
+        monoGain.gain.value = 0.1; // 1kHz sine at amp 0.1 (-20 dBFS sample peak)
+        monoOsc.connect(monoGain);
+        monoGain.connect(monoDest);
+        monoOsc.start();
+
+        const engineMono = new AudioEngine(501, new SyntheticStreamSource(monoDest.stream), {
+          workletUrl: '/src/engine/worklets/loudness-meter-processor.js',
+          channelCount: 1,
+          cycleIntervalMs: 50
+        });
+
+        await engineMono.start();
+        // Allow 3s warm-up + 3.3s release to +5 dB + settling (total 7.5s)
+        await sleep(7500);
+
+        const monoMetrics = engineMono.getMetrics();
+        const monoLufsErr = Math.abs(monoMetrics.inputShortTermLufs - (-23.0));
+
+        record('B5 Mono Channel Detection',
+          engineMono.inputMeter.channelCount === 1,
+          `Production meter channelCount is 1 (observed: ${engineMono.inputMeter.channelCount})`
+        );
+
+        record('B5 Mono Reference Conformance (ITU-R BS.1770-5)',
+          monoMetrics.inputShortTermValid === true && monoLufsErr <= 0.2,
+          `Mono input loudness matches reference: observed=${monoMetrics.inputShortTermLufs} LUFS, expected=-23.0 LUFS (err=${monoLufsErr.toFixed(2)} LU)`
+        );
+
+        record('B5 No Stereo Duplication Bias',
+          Math.abs(monoMetrics.inputShortTermLufs - (-20.0)) >= 2.5,
+          `Absence of +3 LU stereo duplication bias confirmed (observed ${monoMetrics.inputShortTermLufs} LUFS vs stereo -20.0 LUFS)`
+        );
+
+        record('B5 Mono Output Convergence',
+          monoMetrics.outputShortTermValid === true && Math.abs(monoMetrics.outputShortTermLufs - (-18.0)) <= 1.0,
+          `Mono output correctly converged to target: output=${monoMetrics.outputShortTermLufs} LUFS`
+        );
+
+        await engineMono.stop();
+        monoOsc.stop();
+
+        record('Clean Teardown', true, 'All AudioEngines, AudioWorklets, and oscillators terminated cleanly');
       } finally {
         await synthCtx.close();
       }

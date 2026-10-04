@@ -4,9 +4,10 @@ Cross-tab perceptual loudness normalization and independent per-tab audio contro
 
 ## Status
 
-P0 (Feasibility) has concluded with a **GO** decision (see `docs/validation/P0_FEASIBILITY_REPORT.md`).
+- P0 (Feasibility) has concluded with a **GO** decision (see `docs/validation/P0_FEASIBILITY_REPORT.md`).
+- P1 (Stable Audio Engine) has concluded with a **GO** decision (see `docs/validation/P1_AUDIO_ENGINE_REPORT.md`).
 
-Current phase: **P1 — Stable Audio Engine**.
+Current phase: **P2 — Loudness Measurement & Automatic Normalization**.
 
 ## Authoritative documentation
 

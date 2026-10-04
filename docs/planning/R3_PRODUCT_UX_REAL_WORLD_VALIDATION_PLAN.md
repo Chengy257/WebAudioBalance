@@ -1,6 +1,8 @@
 # R3 — Product UX & Real-world Validation Mainline Plan
 
-> Status: **FROZEN PLAN — IMPLEMENTATION AFTER R2 GO**  
+> Implementation Specification: `docs/planning/R3_PRODUCT_UX_REAL_WORLD_VALIDATION_IMPLEMENTATION_SPEC.md` — **FROZEN**  
+
+> Status: **FROZEN PLAN + IMPLEMENTATION SPEC — CODE AFTER R2 GO**  
 > Frozen Date: **2026-10-04**  
 > Parent baseline: `docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`  
 > Dependencies: corrected R1 GO/FROZEN + R2 GO/FROZEN.

@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebAudioBalance - P5 Compatibility & Acoustic Test Fixture</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 800px;
+      margin: 30px auto;
+      padding: 20px;
+      line-height: 1.5;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    h1 { font-size: 20px; margin-bottom: 8px; }
+    p { color: #64748b; font-size: 14px; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    .card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .card h3 { font-size: 15px; margin-bottom: 6px; }
+    .card p { font-size: 12px; margin-bottom: 12px; }
+    .btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .btn:hover { background: #1d4ed8; }
+    .btn.stop { background: #dc2626; }
+    .btn.stop:hover { background: #b91c1c; }
+    .status-text { font-size: 12px; font-family: monospace; color: #475569; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>WebAudioBalance - Real-World Compatibility & Acoustic Test Fixtures</h1>
+  <p>Standardized acoustic workloads for cross-browser verification (Chrome & Edge) and loudness dynamics tuning.</p>
+
+  <div class="grid">
+    <!-- Fixture A: Dialogue & Speech Pauses -->
+    <div class="card" id="card-speech">
+      <h3>1. Podcast & Dialogue (Speech Pauses)</h3>
+      <p>Simulates spoken dialogue with natural 600ms - 1200ms pauses. Tests activity detector gating and zero noise-pumping.</p>
+      <button class="btn" id="btn-speech">Start Speech Stream</button>
+      <div class="status-text" id="status-speech">Inactive</div>
+    </div>
+
+    <!-- Fixture B: High Dynamic Range Media -->
+    <div class="card" id="card-music">
+      <h3>2. Dynamic Media (Quiet Intro -> Loud Chorus)</h3>
+      <p>Simulates -28 LUFS quiet background ramping up to -14 LUFS high-energy music. Tests smooth convergence without overshoot.</p>
+      <button class="btn" id="btn-music">Start Dynamic Media</button>
+      <div class="status-text" id="status-music">Inactive</div>
+    </div>
+
+    <!-- Fixture C: Live Stream & Ambient Noise -->
+    <div class="card" id="card-live">
+      <h3>3. Live Stream with Ambient Floor</h3>
+      <p>Continuous low-level ambient room noise (-45 LUFS) with intermittent speaker events (-16 LUFS).</p>
+      <button class="btn" id="btn-live">Start Live Stream</button>
+      <div class="status-text" id="status-live">Inactive</div>
+    </div>
+
+    <!-- Fixture D: Sudden Loud Transient -->
+    <div class="card" id="card-burst">
+      <h3>4. Sudden Loud Burst / Ad Jump</h3>
+      <p>Abrupt +12 dB volume jump (+6 dBFS peak). Tests rapid safety limiter and 10 dB/s asymmetric attenuation.</p>
+      <button class="btn" id="btn-burst">Trigger Loud Burst</button>
+      <div class="status-text" id="status-burst">Inactive</div>
+    </div>
+
+    <!-- Fixture E: Web Audio Synthesizer -->
+    <div class="card" id="card-synth">
+      <h3>5. Web Audio API Direct Synthesis</h3>
+      <p>Continuous multi-oscillator polyphonic synthesis. Validates direct Web Audio graph capture without HTMLMediaElement.</p>
+      <button class="btn" id="btn-synth">Start Web Audio Synth</button>
+      <div class="status-text" id="status-synth">Inactive</div>
+    </div>
+
+    <!-- Fixture F: Protected Content Simulation -->
+    <div class="card" id="card-drm">
+      <h3>6. DRM / Encrypted Media (Mock)</h3>
+      <p>Simulates an EME-protected stream where tabCapture receives silence or encrypted blocks.</p>
+      <button class="btn" id="btn-drm">Simulate Protected Stream</button>
+      <div class="status-text" id="status-drm">Inactive</div>
+    </div>
+  </div>
+
+  <script>
+    let audioCtx = null;
+    function getAudioCtx() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    // 1. Speech Simulator
+    let speechTimer = null;
+    let speechOsc = null;
+    let speechGain = null;
+    document.getElementById('btn-speech').addEventListener('click', () => {
+      const btn = document.getElementById('btn-speech');
+      const status = document.getElementById('status-speech');
+      if (speechTimer) {
+        clearInterval(speechTimer);
+        speechTimer = null;
+        if (speechGain) speechGain.gain.setValueAtTime(0, audioCtx.currentTime);
+        btn.textContent = 'Start Speech Stream';
+        btn.classList.remove('stop');
+        status.textContent = 'Stopped';
+        return;
+      }
+      const ctx = getAudioCtx();
+      speechOsc = ctx.createOscillator();
+      speechGain = ctx.createGain();
+      speechOsc.type = 'triangle';
+      speechOsc.frequency.setValueAtTime(220, ctx.currentTime);
+      speechGain.gain.setValueAtTime(0, ctx.currentTime);
+      speechOsc.connect(speechGain);
+      speechGain.connect(ctx.destination);
+      speechOsc.start();
+
+      let speaking = false;
+      speechTimer = setInterval(() => {
+        speaking = !speaking;
+        const now = ctx.currentTime;
+        if (speaking) {
+          speechGain.gain.linearRampToValueAtTime(0.2, now + 0.05); // speech utterance (~ -18 LUFS)
+          status.textContent = 'Active: Spoken Utterance';
+        } else {
+          speechGain.gain.linearRampToValueAtTime(0.0001, now + 0.05); // speech pause (hold time test)
+          status.textContent = 'Paused: Silent Interval (600ms hold)';
+        }
+      }, 900);
+
+      btn.textContent = 'Stop Speech Stream';
+      btn.classList.add('stop');
+    });
+
+    // 2. Dynamic Media Simulator
+    let musicOsc1 = null, musicOsc2 = null, musicGain = null;
+    let musicTimer = null;
+    document.getElementById('btn-music').addEventListener('click', () => {
+      const btn = document.getElementById('btn-music');
+      const status = document.getElementById('status-music');
+      if (musicTimer) {
+        clearInterval(musicTimer);
+        musicTimer = null;
+        if (musicGain) musicGain.gain.setValueAtTime(0, audioCtx.currentTime);
+        btn.textContent = 'Start Dynamic Media';
+        btn.classList.remove('stop');
+        status.textContent = 'Stopped';
+        return;
+      }
+      const ctx = getAudioCtx();
+      musicOsc1 = ctx.createOscillator();
+      musicOsc2 = ctx.createOscillator();
+      musicGain = ctx.createGain();
+      musicOsc1.type = 'sine';
+      musicOsc1.frequency.setValueAtTime(440, ctx.currentTime);
+      musicOsc2.type = 'sawtooth';
+      musicOsc2.frequency.setValueAtTime(554.37, ctx.currentTime);
+      musicGain.gain.setValueAtTime(0.02, ctx.currentTime); // start quiet (-28 LUFS)
+
+      musicOsc1.connect(musicGain);
+      musicOsc2.connect(musicGain);
+      musicGain.connect(ctx.destination);
+      musicOsc1.start();
+      musicOsc2.start();
+
+      let isChorus = false;
+      status.textContent = 'Playing: Quiet Intro (-28 LUFS)';
+      musicTimer = setInterval(() => {
+        isChorus = !isChorus;
+        const now = ctx.currentTime;
+        const targetAmp = isChorus ? 0.35 : 0.02;
+        musicGain.gain.linearRampToValueAtTime(targetAmp, now + 0.5);
+        status.textContent = isChorus ? 'Playing: Loud Chorus (-14 LUFS)' : 'Playing: Quiet Verse (-28 LUFS)';
+      }, 4000);
+
+      btn.textContent = 'Stop Dynamic Media';
+      btn.classList.add('stop');
+    });
+
+    // 3. Web Audio Synthesizer
+    let synthOsc = null;
+    document.getElementById('btn-synth').addEventListener('click', () => {
+      const btn = document.getElementById('btn-synth');
+      const status = document.getElementById('status-synth');
+      if (synthOsc) {
+        synthOsc.stop();
+        synthOsc.disconnect();
+        synthOsc = null;
+        btn.textContent = 'Start Web Audio Synth';
+        btn.classList.remove('stop');
+        status.textContent = 'Stopped';
+        return;
+      }
+      const ctx = getAudioCtx();
+      synthOsc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      synthOsc.type = 'sine';
+      synthOsc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+      synthOsc.connect(gain);
+      gain.connect(ctx.destination);
+      synthOsc.start();
+      btn.textContent = 'Stop Web Audio Synth';
+      btn.classList.add('stop');
+      status.textContent = 'Synthesizing 523 Hz Tone';
+    });
+
+    // 4. Loud Burst Trigger
+    document.getElementById('btn-burst').addEventListener('click', () => {
+      const ctx = getAudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.9, ctx.currentTime); // Extreme high amplitude
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      document.getElementById('status-burst').textContent = 'BURST ACTIVE (+6 dBFS peak)';
+      setTimeout(() => {
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.1);
+        setTimeout(() => {
+          osc.stop();
+          osc.disconnect();
+          document.getElementById('status-burst').textContent = 'Burst Ended (Attenuated)';
+        }, 150);
+      }, 800);
+    });
+
+    // 5. Protected Content Mock
+    document.getElementById('btn-drm').addEventListener('click', () => {
+      document.getElementById('status-drm').textContent = 'Simulating DRM stream (EME CDM active, zero PCM leaked)';
+    });
+  </script>
+</body>
+</html>

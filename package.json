@@ -1,0 +1,21 @@
+{
+  "name": "webaudiobalance",
+  "version": "0.1.0",
+  "description": "Cross-tab perceptual loudness normalization and independent per-tab audio control for Chrome and Edge",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/start-poc.mjs edge",
+    "start:edge": "node scripts/start-poc.mjs edge",
+    "start:chrome": "node scripts/start-poc.mjs chrome",
+    "test:cdp": "node test/inspect-cdp.mjs"
+  },
+  "keywords": [
+    "chrome-extension",
+    "webaudio",
+    "loudness-normalization",
+    "tabcapture",
+    "manifest-v3"
+  ],
+  "author": "",
+  "license": "UNLICENSED"
+}

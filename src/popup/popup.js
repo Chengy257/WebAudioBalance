@@ -94,10 +94,29 @@ async function handleEnableCapture() {
   logger.info('User requested capture start', { tabId: currentTab.id });
 
   try {
+    // Acquire stream ID directly within the user gesture context in popup
+    let streamId = null;
+    try {
+      streamId = await new Promise((resolve, reject) => {
+        chrome.tabCapture.getMediaStreamId({ targetTabId: currentTab.id }, (id) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else if (!id) {
+            reject(new Error('getMediaStreamId returned empty stream ID'));
+          } else {
+            resolve(id);
+          }
+        });
+      });
+      logger.info('Stream ID acquired in popup user gesture', { tabId: currentTab.id, streamIdPresent: Boolean(streamId) });
+    } catch (gestureErr) {
+      logger.warn('Could not acquire stream ID directly in popup, falling back to SW delegation', { error: gestureErr.message });
+    }
+
     const response = await chrome.runtime.sendMessage(createMessage(
       MessageTypes.START_CAPTURE,
       MessageTargets.SERVICE_WORKER,
-      { tabId: currentTab.id }
+      { tabId: currentTab.id, streamId }
     ));
 
     if (response && response.success) {

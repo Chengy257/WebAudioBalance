@@ -48,15 +48,43 @@ async function ensureOffscreenDocument() {
 }
 
 /**
- * Handle START_CAPTURE command
+ * Register Context Menu for 1-click user invocation
  */
-async function handleStartCapture(tabId) {
+chrome.runtime.onInstalled.addListener(() => {
+  if (chrome.contextMenus) {
+    chrome.contextMenus.create({
+      id: 'balance-tab-menu',
+      title: 'WebAudioBalance: Balance this tab',
+      contexts: ['page', 'frame', 'video', 'audio']
+    });
+  }
+});
+
+if (chrome.contextMenus && chrome.contextMenus.onClicked) {
+  chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (info.menuItemId === 'balance-tab-menu' && tab && tab.id) {
+      logger.info('User activated capture via context menu', { tabId: tab.id });
+      try {
+        const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+        await handleStartCapture(tab.id, streamId);
+      } catch (err) {
+        logger.error('Failed to capture tab via context menu', { tabId: tab.id, error: err.message });
+      }
+    }
+  });
+}
+
+/**
+ * Handle START_CAPTURE command
+ * Supports pre-acquired streamId (from popup/contextMenu) or direct acquisition
+ */
+async function handleStartCapture(tabId, existingStreamId = null) {
   try {
-    logger.info('Initiating capture for tab', { tabId });
+    logger.info('Initiating capture for tab', { tabId, hasExistingStreamId: Boolean(existingStreamId) });
     await ensureOffscreenDocument();
 
-    // Acquire stream ID from tabCapture API
-    const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
+    // Acquire stream ID from tabCapture API if not already provided
+    const streamId = existingStreamId || await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
     if (!streamId) {
       throw new Error('tabCapture.getMediaStreamId returned empty stream ID');
     }
@@ -115,7 +143,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return true;
 
     case MessageTypes.START_CAPTURE:
-      handleStartCapture(payload.tabId)
+      handleStartCapture(payload.tabId, payload.streamId)
         .then((result) => sendResponse(result))
         .catch((err) => sendResponse({ success: false, error: err.message }));
       return true;

@@ -9,8 +9,9 @@ Cross-tab perceptual loudness normalization and independent per-tab audio contro
 - P2 (Loudness Measurement & Automatic Normalization) has concluded with a **GO** decision (see `docs/validation/P2_NORMALIZATION_REPORT.md`).
 - P3 (Multi-tab Orchestration) has concluded with a **GO** decision (see `docs/validation/P3_MULTI_TAB_ORCHESTRATION_REPORT.md`).
 - P4 (Product UI & User Interaction) has concluded with a **GO** decision (see `docs/validation/P4_PRODUCT_UI_REPORT.md`).
+- P5 (Compatibility & Validation) has concluded with a **GO** decision (see `docs/validation/P5_COMPATIBILITY_REPORT.md`).
 
-Current phase: **P5 — Compatibility, Real-world Audio Validation & Tuning**.
+Current phase: **P6 — Hardening, Performance Optimization & Release Packaging**.
 
 ## Authoritative documentation
 

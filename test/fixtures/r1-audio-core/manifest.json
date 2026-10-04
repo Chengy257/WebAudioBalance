@@ -1,0 +1,65 @@
+{
+  "version": "1.0.0",
+  "standard": "ITU-R BS.1770-5",
+  "generatedDate": "2026-10-04",
+  "fixtures": [
+    {
+      "id": "ref-sine-1khz-48k-m20",
+      "sampleRate": 48000,
+      "channelCount": 2,
+      "duration": 4.0,
+      "signalType": "sine",
+      "frequencyHz": 1000,
+      "amplitude": 0.1,
+      "referenceMomentaryLufs": -20.0,
+      "referenceShortTermLufs": -20.0,
+      "referenceSamplePeakDbFS": -20.0,
+      "toleranceLu": 0.2,
+      "referenceSource": "ITU-R BS.1770-5 Annex 1 & libebur128 analytical calibration standard",
+      "purpose": "48 kHz stereo baseline loudness and peak measurement conformance"
+    },
+    {
+      "id": "ref-sine-1khz-44k-m20",
+      "sampleRate": 44100,
+      "channelCount": 2,
+      "duration": 4.0,
+      "signalType": "sine",
+      "frequencyHz": 1000,
+      "amplitude": 0.1,
+      "referenceMomentaryLufs": -20.0,
+      "referenceShortTermLufs": -20.0,
+      "referenceSamplePeakDbFS": -20.0,
+      "toleranceLu": 0.2,
+      "referenceSource": "ITU-R BS.1770-5 Annex 1 & libebur128 bilinear transform calibration",
+      "purpose": "44.1 kHz sample-rate-adjusted coefficient conformance"
+    },
+    {
+      "id": "ref-sine-mono-48k-m23",
+      "sampleRate": 48000,
+      "channelCount": 1,
+      "duration": 4.0,
+      "signalType": "sine",
+      "frequencyHz": 1000,
+      "amplitude": 0.1,
+      "referenceMomentaryLufs": -23.0,
+      "referenceShortTermLufs": -23.0,
+      "referenceSamplePeakDbFS": -20.0,
+      "toleranceLu": 0.2,
+      "referenceSource": "ITU-R BS.1770-5 Single-Channel mono power sum calibration (-3.01 LU vs stereo dual-mono)",
+      "purpose": "Mono channel energy weighting without stereo/mono bias"
+    },
+    {
+      "id": "ref-quiet-headroom-limit",
+      "sampleRate": 48000,
+      "channelCount": 2,
+      "duration": 4.0,
+      "signalType": "impulsive_sparse",
+      "backgroundLufs": -32.0,
+      "peakDbFS": -1.0,
+      "targetLufs": -18.0,
+      "expectedLimited": true,
+      "expectedLimitReason": "headroom",
+      "purpose": "Headroom safety constraint under low-average / high-peak condition"
+    }
+  ]
+}

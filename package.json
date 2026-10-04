@@ -7,6 +7,10 @@
     "start": "node scripts/start-poc.mjs edge",
     "start:edge": "node scripts/start-poc.mjs edge",
     "start:chrome": "node scripts/start-poc.mjs chrome",
+    "test": "node test/test-r1-audio-core.mjs",
+    "test:r1": "node test/test-r1-audio-core.mjs",
+    "test:r1:browser": "node test/run-r1-browser-validation.mjs",
+    "test:all": "node test/test-r1-audio-core.mjs && node test/test-p1-engine.mjs && node test/test-p2-normalization.mjs && node test/test-p3-orchestration.mjs && node test/test-p4-ui.mjs && node test/test-p5-compatibility.mjs && node test/test-p6-release.mjs",
     "test:cdp": "node test/inspect-cdp.mjs"
   },
   "keywords": [

@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>WebAudioBalance - R1 Browser Audio-Path Validation Fixture</title>
+</head>
+<body>
+  <h1>R1 Browser Audio-Path Validation</h1>
+  <div id="status">Initializing fixture...</div>
+  <pre id="log"></pre>
+
+  <script type="module">
+    import { AudioEngine } from '/src/engine/audio-engine.js';
+    import { LoudnessMeter } from '/src/engine/loudness-meter.js';
+
+    class SyntheticStreamSource {
+      constructor(stream) {
+        this.stream = stream;
+        this.listeners = new Map();
+      }
+      on(event, cb) {
+        if (!this.listeners.has(event)) this.listeners.set(event, []);
+        this.listeners.get(event).push(cb);
+      }
+      async acquire() {
+        return this.stream;
+      }
+      release() {
+        if (this.stream) {
+          this.stream.getAudioTracks().forEach(t => t.stop());
+        }
+      }
+    }
+
+    function createToneStream(audioCtx, freq, gainVal) {
+      const dest = audioCtx.createMediaStreamDestination();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.value = gainVal;
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start();
+      return {
+        stream: dest.stream,
+        osc,
+        gain
+      };
+    }
+
+    function sleep(ms) {
+      return new Promise(r => setTimeout(r, ms));
+    }
+
+    window.runBrowserR1Suite = async function() {
+      const results = {
+        passed: 0,
+        failed: 0,
+        tests: []
+      };
+
+      function record(name, pass, detail) {
+        if (pass) {
+          results.passed++;
+          results.tests.push({ name, pass: true, detail });
+          console.log(`[PASS] ${name}: ${detail}`);
+        } else {
+          results.failed++;
+          results.tests.push({ name, pass: false, detail });
+          console.error(`[FAIL] ${name}: ${detail}`);
+        }
+      }
+
+      const synthCtx = new AudioContext();
+      if (synthCtx.state === 'suspended') await synthCtx.resume();
+
+      try {
+        console.log('--- Test 1: Real Browser AudioWorklet End-to-End Absolute Convergence ---');
+        // Create 3 independent synthetic streams:
+        // Amp 0.3162 ~= -10 dBFS (-10 LUFS)
+        // Amp 0.1259 ~= -18 dBFS (-18 LUFS)
+        // Amp 0.0501 ~= -26 dBFS (-26 LUFS)
+        const toneA = createToneStream(synthCtx, 1000, 0.3162);
+        const toneB = createToneStream(synthCtx, 1000, 0.1259);
+        const toneC = createToneStream(synthCtx, 1000, 0.0501);
+
+        const engineA = new AudioEngine(101, new SyntheticStreamSource(toneA.stream), {
+          workletUrl: '/src/engine/worklets/loudness-meter-processor.js',
+          cycleIntervalMs: 50
+        });
+        const engineB = new AudioEngine(102, new SyntheticStreamSource(toneB.stream), {
+          workletUrl: '/src/engine/worklets/loudness-meter-processor.js',
+          cycleIntervalMs: 50
+        });
+        const engineC = new AudioEngine(103, new SyntheticStreamSource(toneC.stream), {
+          workletUrl: '/src/engine/worklets/loudness-meter-processor.js',
+          cycleIntervalMs: 50
+        });
+
+        await engineA.start();
+        await engineB.start();
+        await engineC.start();
+
+        record('AudioWorklet Initialization', true, 'All 3 independent AudioEngines started with real AudioWorkletNodes');
+
+        // Allow 9.5 seconds for contiguous 3.0s window validity and 1.5 dB/s release convergence
+        await sleep(9500);
+
+        const metricsA = engineA.getMetrics();
+        const metricsB = engineB.getMetrics();
+        const metricsC = engineC.getMetrics();
+
+        // 1.1 Validity
+        record('Output Meter Validity',
+          metricsA.outputShortTermValid === true && metricsB.outputShortTermValid === true && metricsC.outputShortTermValid === true,
+          `Engine A/B/C outputShortTermValid: ${metricsA.outputShortTermValid}, ${metricsB.outputShortTermValid}, ${metricsC.outputShortTermValid}`
+        );
+
+        // 1.2 Observed Processed-Output Absolute Convergence (±1.0 LU of -18.0 LUFS)
+        const errA = Math.abs(metricsA.outputShortTermLufs - (-18.0));
+        const errB = Math.abs(metricsB.outputShortTermLufs - (-18.0));
+        const errC = Math.abs(metricsC.outputShortTermLufs - (-18.0));
+
+        record('Engine A Output Convergence', errA <= 1.0,
+          `Engine A (input ~${metricsA.inputShortTermLufs} LUFS) output Short-Term: ${metricsA.outputShortTermLufs} LUFS (err: ${errA.toFixed(2)} LU)`
+        );
+        record('Engine B Output Convergence', errB <= 1.0,
+          `Engine B (input ~${metricsB.inputShortTermLufs} LUFS) output Short-Term: ${metricsB.outputShortTermLufs} LUFS (err: ${errB.toFixed(2)} LU)`
+        );
+        record('Engine C Output Convergence', errC <= 1.0,
+          `Engine C (input ~${metricsC.inputShortTermLufs} LUFS) output Short-Term: ${metricsC.outputShortTermLufs} LUFS (err: ${errC.toFixed(2)} LU)`
+        );
+
+        // 1.3 Target Error metric verification
+        record('Canonical Output Target Error',
+          typeof metricsA.outputTargetErrorLu === 'number' && Math.abs(metricsA.outputTargetErrorLu) <= 1.0,
+          `outputTargetErrorLu reported canonically: ${metricsA.outputTargetErrorLu} LU`
+        );
+
+        // --- Test 2: Dynamic Relative Offset In Browser Audio Path ---
+        console.log('--- Test 2: Dynamic Relative Target Offset ---');
+        engineA.setRelativeOffsetDb(3.0); // Effective target becomes -15.0 LUFS
+        await sleep(2000); // 2s adaptation
+        const metricsAOffset = engineA.getMetrics();
+        const errOffset = Math.abs(metricsAOffset.outputShortTermLufs - (-15.0));
+        record('Relative Target Offset (+3 dB)', errOffset <= 1.0,
+          `Engine A output after +3 dB offset tracked to ${metricsAOffset.outputShortTermLufs} LUFS (target -15.0 LUFS)`
+        );
+        record('Multi-Engine Isolation During Offset',
+          Math.abs(engineB.getMetrics().outputShortTermLufs - (-18.0)) <= 1.0,
+          `Engine B remained stable at ${engineB.getMetrics().outputShortTermLufs} LUFS without crosstalk`
+        );
+
+        // --- Test 3: Headroom Safety Limit in Browser Audio Path ---
+        console.log('--- Test 3: Headroom Safety Limit ---');
+        // Engine C has quiet input (-26 LUFS). If user sets +12 dB offset, total requested gain would be +20 dB!
+        // Configured max gain / headroom ceiling will clamp it safely.
+        engineC.setRelativeOffsetDb(10.0);
+        await sleep(1500);
+        const metricsCLimited = engineC.getMetrics();
+        record('Safety Limit Enforcement',
+          metricsCLimited.isLimited === true,
+          `Engine C excessive boost marked isLimited=${metricsCLimited.isLimited} (reason: ${metricsCLimited.limitReason})`
+        );
+        record('Output Peak Bounded',
+          metricsCLimited.outputSamplePeakDbFS <= 0.0,
+          `Output peak safely constrained: ${metricsCLimited.outputSamplePeakDbFS} dBFS`
+        );
+
+        // --- Test 4: Full AudioEngine Disposal & Zero Leak ---
+        console.log('--- Test 4: AudioEngine Teardown ---');
+        await engineA.stop();
+        await engineB.stop();
+        await engineC.stop();
+
+        record('Clean Teardown',
+          engineA.audioCtx === null && engineA.inputMeter === null && engineA.outputMeter === null,
+          'AudioEngine resources, AudioWorklets, and AudioContext closed cleanly'
+        );
+
+        toneA.osc.stop();
+        toneB.osc.stop();
+        toneC.osc.stop();
+      } finally {
+        await synthCtx.close();
+      }
+
+      document.getElementById('status').innerText = `Completed: ${results.passed} passed, ${results.failed} failed`;
+      return results;
+    };
+  </script>
+</body>
+</html>

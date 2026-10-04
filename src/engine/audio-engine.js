@@ -1,13 +1,13 @@
 /**
  * WebAudioBalance - AudioEngine
- * Concrete per-tab audio engine managing source, gain, BS.1770 metering, safety, normalization, and lifecycle
+ * Concrete per-tab audio engine managing source capture, gain processing,
+ * dual continuous BS.1770-5 loudness metering (input + output verification),
+ * headroom-aware safety, and normalization lifecycle.
  */
 
 import { AudioEngineState, validateStateTransition } from './types.js';
 import { GainProcessor } from './gain-processor.js';
-import { EngineeringMeter } from './meter.js';
 import { SafetyHook } from './safety.js';
-import { KWeightingFilter } from './k-weighting.js';
 import { LoudnessMeter } from './loudness-meter.js';
 import { ActivityDetector } from './activity-detector.js';
 import { NormalizationController } from './normalization-controller.js';
@@ -22,15 +22,21 @@ export class AudioEngine {
     this.audioCtx = null;
     this.sourceNode = null;
     this.gainProcessor = null;
-    this.engineeringMeter = null;
     this.safetyHook = null;
 
-    // P2 Perceptual Loudness & Normalization Components
-    this.kWeighting = null;
+    // Dual continuous loudness meters
+    this.inputMeter = null;
+    this.outputMeter = null;
+
+    // Compatibility references
     this.loudnessMeter = null;
+    this.engineeringMeter = null;
+    this.kWeighting = null;
+
     this.activityDetector = new ActivityDetector(options.activityOptions);
     this.controller = new NormalizationController(options.controllerOptions);
 
+    this.wasActive = false;
     this.engineTimer = null;
     this.startedAt = null;
     this.lastError = null;
@@ -82,32 +88,34 @@ export class AudioEngine {
         await this.audioCtx.resume();
       }
 
-      // 3. Create Web Audio nodes
+      // 3. Load AudioWorklet module for continuous loudness measurement
+      await LoudnessMeter.initWorklet(this.audioCtx, this.options.workletUrl);
+
+      // 4. Create Web Audio processing and observation nodes
       this.sourceNode = this.audioCtx.createMediaStreamSource(stream);
       this.gainProcessor = new GainProcessor(this.audioCtx, this.options.gainOptions);
       this.safetyHook = new SafetyHook(this.audioCtx, this.options.safetyOptions);
 
-      // Observation 1: Engineering Meter
-      this.engineeringMeter = new EngineeringMeter(this.audioCtx, 2048);
+      // Observation Branch 1: Continuous Input Loudness Meter
+      this.inputMeter = new LoudnessMeter(this.audioCtx, { isOutput: false, channelCount: 2 });
+      this.loudnessMeter = this.inputMeter; // Compatibility alias
 
-      // Observation 2: K-Weighting Filter + BS.1770 Loudness Meter
-      this.kWeighting = new KWeightingFilter(this.audioCtx);
-      this.loudnessMeter = new LoudnessMeter(this.audioCtx);
+      // Observation Branch 2: Continuous Processed-Output Verification Meter
+      this.outputMeter = new LoudnessMeter(this.audioCtx, { isOutput: true, channelCount: 2 });
 
-      // 4. Assemble Graph:
-      // Audio path branch: source -> gain -> safety -> destination
+      // 5. Assemble Web Audio Graph:
+      // Audible path: source -> GainProcessor -> SafetyHook -> destination
       this.sourceNode.connect(this.gainProcessor.getNode());
       this.gainProcessor.getNode().connect(this.safetyHook.getInputNode());
       this.safetyHook.getOutputNode().connect(this.audioCtx.destination);
 
-      // Observation branch 1: source -> engineering meter
-      this.sourceNode.connect(this.engineeringMeter.getNode());
+      // Observation branch 1: source -> inputMeter
+      this.sourceNode.connect(this.inputMeter.getNode());
 
-      // Observation branch 2: source -> K-weighting filters -> loudness meter
-      this.sourceNode.connect(this.kWeighting.getInputNode());
-      this.kWeighting.getOutputNode().connect(this.loudnessMeter.getNode());
+      // Observation branch 2: post-safety output -> outputMeter
+      this.safetyHook.getOutputNode().connect(this.outputMeter.getNode());
 
-      // 5. Start periodic control and metering loop (100ms)
+      // 6. Start periodic control and metrics cycle (default 100ms)
       this.engineTimer = setInterval(() => {
         if (this.state === AudioEngineState.RUNNING) {
           this.processControlCycle();
@@ -125,38 +133,96 @@ export class AudioEngine {
   }
 
   processControlCycle() {
-    // 1. Measure engineering levels
-    const engMetrics = this.engineeringMeter.measure();
+    // 1. Read input continuous loudness metrics
+    const inputMetrics = this.inputMeter ? this.inputMeter.getMetrics() : {
+      momentaryLufs: -100,
+      shortTermLufs: -100,
+      momentaryValid: false,
+      shortTermValid: false,
+      samplePeakDbFS: -100,
+      measurementSequence: 0
+    };
 
-    // 2. Measure perceptual loudness
-    const lufsMetrics = this.loudnessMeter.measure();
+    // 2. Process activity / silence gate
+    const activity = this.activityDetector.process(inputMetrics.momentaryLufs);
 
-    // 3. Process activity / silence gate
-    const activity = this.activityDetector.process(lufsMetrics.momentaryLufs);
+    // 3. Handle silence -> active resume transition: reset epoch to avoid silence poisoning
+    if (!this.wasActive && activity.isActive) {
+      if (this.inputMeter) this.inputMeter.resetEpoch();
+      if (this.outputMeter) this.outputMeter.resetEpoch();
+    }
+    this.wasActive = activity.isActive;
 
     // 4. Update normalization controller
-    // Use short-term if warm (> -70), otherwise momentary for faster initial acquisition
-    const controlInput = lufsMetrics.shortTermLufs > -70 ? lufsMetrics.shortTermLufs : lufsMetrics.momentaryLufs;
-    const ctrlState = this.controller.update(controlInput, activity.isActive);
+    const ctrlState = this.controller.update(inputMetrics, activity.isActive);
 
-    // 5. Apply effective gain to GainProcessor (smooth transition over 50ms)
-    this.gainProcessor.setGainDb(ctrlState.effectiveGainDb, 0.05);
+    // 5. Apply effective gain to GainProcessor (smooth transition over 40ms)
+    if (this.gainProcessor) {
+      this.gainProcessor.setGainDb(ctrlState.appliedGainDb, 0.04);
+    }
 
-    // 6. Broadcast comprehensive metrics
-    this.emit('metrics', {
+    // 6. Read processed-output verification metrics
+    const outputMetrics = this.outputMeter ? this.outputMeter.getMetrics() : {
+      momentaryLufs: -100,
+      shortTermLufs: -100,
+      momentaryValid: false,
+      shortTermValid: false,
+      samplePeakDbFS: -100
+    };
+
+    const outputTargetErrorLu = outputMetrics.shortTermValid ?
+      Number((outputMetrics.shortTermLufs - ctrlState.effectiveTargetLufs).toFixed(1)) : null;
+
+    // 7. Broadcast comprehensive authoritative metrics
+    const metricsPayload = {
       tabId: this.tabId,
-      rmsDbFS: engMetrics.rmsDbFS,
-      peakDbFS: lufsMetrics.peakDbFS,
-      momentaryLufs: lufsMetrics.momentaryLufs,
-      shortTermLufs: lufsMetrics.shortTermLufs,
-      autoGainDb: ctrlState.autoGainDb,
-      manualOffsetDb: ctrlState.manualOffsetDb,
-      effectiveGainDb: ctrlState.effectiveGainDb,
-      targetLufs: ctrlState.targetLufs,
+
+      // Input continuous measurement
+      inputMomentaryLufs: inputMetrics.momentaryLufs,
+      inputShortTermLufs: inputMetrics.shortTermLufs,
+      inputMomentaryValid: inputMetrics.momentaryValid,
+      inputShortTermValid: inputMetrics.shortTermValid,
+      inputSamplePeakDbFS: inputMetrics.samplePeakDbFS,
+
+      // Output verification measurement
+      outputMomentaryLufs: outputMetrics.momentaryLufs,
+      outputShortTermLufs: outputMetrics.shortTermLufs,
+      outputMomentaryValid: outputMetrics.momentaryValid,
+      outputShortTermValid: outputMetrics.shortTermValid,
+      outputSamplePeakDbFS: outputMetrics.samplePeakDbFS,
+
+      // Target and controller state
+      globalTargetLufs: ctrlState.globalTargetLufs,
+      relativeOffsetDb: ctrlState.relativeOffsetDb,
+      effectiveTargetLufs: ctrlState.effectiveTargetLufs,
+
+      desiredAutoGainDb: ctrlState.desiredAutoGainDb,
+      appliedAutoGainDb: ctrlState.appliedAutoGainDb,
+      requestedTotalGainDb: ctrlState.requestedTotalGainDb,
+      appliedGainDb: ctrlState.appliedGainDb,
+      gainErrorDb: ctrlState.gainErrorDb,
+
+      outputTargetErrorLu,
       isActive: activity.isActive,
       isFrozen: ctrlState.isFrozen,
-      audioContextState: this.audioCtx.state
-    });
+      isLimited: ctrlState.isLimited,
+      limitReason: ctrlState.limitReason,
+      measurementSequence: inputMetrics.measurementSequence,
+      audioContextState: this.audioCtx?.state || 'closed',
+
+      // Compatibility fields for legacy consumers
+      momentaryLufs: inputMetrics.momentaryLufs,
+      shortTermLufs: inputMetrics.shortTermLufs,
+      peakDbFS: inputMetrics.samplePeakDbFS,
+      rmsDbFS: inputMetrics.shortTermLufs, // approximation alias for legacy rmsDbFS display
+      autoGainDb: ctrlState.appliedAutoGainDb,
+      manualOffsetDb: ctrlState.relativeOffsetDb,
+      effectiveGainDb: ctrlState.appliedGainDb,
+      targetLufs: ctrlState.globalTargetLufs
+    };
+
+    this.emit('metrics', metricsPayload);
+    return metricsPayload;
   }
 
   async stop() {
@@ -191,19 +257,15 @@ export class AudioEngine {
       this.sourceNode = null;
     }
 
-    if (this.engineeringMeter) {
-      this.engineeringMeter.disconnect();
-      this.engineeringMeter = null;
+    if (this.inputMeter) {
+      this.inputMeter.disconnect();
+      this.inputMeter = null;
     }
+    this.loudnessMeter = null;
 
-    if (this.kWeighting) {
-      this.kWeighting.disconnect();
-      this.kWeighting = null;
-    }
-
-    if (this.loudnessMeter) {
-      this.loudnessMeter.disconnect();
-      this.loudnessMeter = null;
+    if (this.outputMeter) {
+      this.outputMeter.disconnect();
+      this.outputMeter = null;
     }
 
     if (this.gainProcessor) {
@@ -215,6 +277,9 @@ export class AudioEngine {
       this.safetyHook.disconnect();
       this.safetyHook = null;
     }
+
+    this.engineeringMeter = null;
+    this.kWeighting = null;
 
     if (this.source) {
       this.source.release();
@@ -229,6 +294,7 @@ export class AudioEngine {
 
     this.activityDetector.reset();
     this.controller.reset();
+    this.wasActive = false;
     this.listeners.clear();
   }
 
@@ -236,11 +302,19 @@ export class AudioEngine {
     this.controller.setManualOffsetDb(gainDb);
     if (this.state === AudioEngineState.RUNNING && this.gainProcessor) {
       const state = this.controller.getState();
-      this.gainProcessor.setGainDb(state.effectiveGainDb, 0.04);
+      this.gainProcessor.setGainDb(state.appliedGainDb, 0.04);
     }
   }
 
+  setRelativeOffsetDb(gainDb) {
+    this.setManualOffsetDb(gainDb);
+  }
+
   setTargetLufs(targetLufs) {
+    this.controller.setTargetLufs(targetLufs);
+  }
+
+  setGlobalTargetLufs(targetLufs) {
     this.controller.setTargetLufs(targetLufs);
   }
 
@@ -248,7 +322,7 @@ export class AudioEngine {
     this.controller.setEnabled(enabled);
     if (this.state === AudioEngineState.RUNNING && this.gainProcessor) {
       const state = this.controller.getState();
-      this.gainProcessor.setGainDb(state.effectiveGainDb, 0.04);
+      this.gainProcessor.setGainDb(state.appliedGainDb, 0.04);
     }
   }
 
@@ -261,22 +335,66 @@ export class AudioEngine {
   }
 
   getMetrics() {
-    const lufsMetrics = this.loudnessMeter ? this.loudnessMeter.getMetrics() : { momentaryLufs: -100, shortTermLufs: -100, peakDbFS: -100 };
-    const engMetrics = this.engineeringMeter ? this.engineeringMeter.getMetrics() : { rmsDbFS: -100 };
+    const inputMetrics = this.inputMeter ? this.inputMeter.getMetrics() : {
+      momentaryLufs: -100,
+      shortTermLufs: -100,
+      momentaryValid: false,
+      shortTermValid: false,
+      samplePeakDbFS: -100,
+      measurementSequence: 0
+    };
+    const outputMetrics = this.outputMeter ? this.outputMeter.getMetrics() : {
+      momentaryLufs: -100,
+      shortTermLufs: -100,
+      momentaryValid: false,
+      shortTermValid: false,
+      samplePeakDbFS: -100
+    };
     const ctrlState = this.controller.getState();
+    const outputTargetErrorLu = outputMetrics.shortTermValid ?
+      Number((outputMetrics.shortTermLufs - ctrlState.effectiveTargetLufs).toFixed(1)) : null;
 
     return {
-      rmsDbFS: engMetrics.rmsDbFS,
-      peakDbFS: lufsMetrics.peakDbFS,
-      momentaryLufs: lufsMetrics.momentaryLufs,
-      shortTermLufs: lufsMetrics.shortTermLufs,
-      autoGainDb: ctrlState.autoGainDb,
-      manualOffsetDb: ctrlState.manualOffsetDb,
-      effectiveGainDb: ctrlState.effectiveGainDb,
-      targetLufs: ctrlState.targetLufs,
+      tabId: this.tabId,
+      inputMomentaryLufs: inputMetrics.momentaryLufs,
+      inputShortTermLufs: inputMetrics.shortTermLufs,
+      inputMomentaryValid: inputMetrics.momentaryValid,
+      inputShortTermValid: inputMetrics.shortTermValid,
+      inputSamplePeakDbFS: inputMetrics.samplePeakDbFS,
+
+      outputMomentaryLufs: outputMetrics.momentaryLufs,
+      outputShortTermLufs: outputMetrics.shortTermLufs,
+      outputMomentaryValid: outputMetrics.momentaryValid,
+      outputShortTermValid: outputMetrics.shortTermValid,
+      outputSamplePeakDbFS: outputMetrics.samplePeakDbFS,
+
+      globalTargetLufs: ctrlState.globalTargetLufs,
+      relativeOffsetDb: ctrlState.relativeOffsetDb,
+      effectiveTargetLufs: ctrlState.effectiveTargetLufs,
+
+      desiredAutoGainDb: ctrlState.desiredAutoGainDb,
+      appliedAutoGainDb: ctrlState.appliedAutoGainDb,
+      requestedTotalGainDb: ctrlState.requestedTotalGainDb,
+      appliedGainDb: ctrlState.appliedGainDb,
+      gainErrorDb: ctrlState.gainErrorDb,
+
+      outputTargetErrorLu,
       isActive: this.activityDetector.isActive,
       isFrozen: ctrlState.isFrozen,
-      audioContextState: this.audioCtx?.state || 'closed'
+      isLimited: ctrlState.isLimited,
+      limitReason: ctrlState.limitReason,
+      measurementSequence: inputMetrics.measurementSequence,
+      audioContextState: this.audioCtx?.state || 'closed',
+
+      // Compatibility aliases
+      momentaryLufs: inputMetrics.momentaryLufs,
+      shortTermLufs: inputMetrics.shortTermLufs,
+      peakDbFS: inputMetrics.samplePeakDbFS,
+      rmsDbFS: inputMetrics.shortTermLufs,
+      autoGainDb: ctrlState.appliedAutoGainDb,
+      manualOffsetDb: ctrlState.relativeOffsetDb,
+      effectiveGainDb: ctrlState.appliedGainDb,
+      targetLufs: ctrlState.globalTargetLufs
     };
   }
 

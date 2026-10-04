@@ -1,102 +1,141 @@
 /**
- * WebAudioBalance - LoudnessMeter (BS.1770 compliant)
- * Calculates Momentary Loudness (400ms) and Short-Term Loudness (3s) from K-weighted audio
+ * WebAudioBalance - LoudnessMeter (ITU-R BS.1770-5 aligned)
+ * Continuous PCM loudness meter wrapper around LoudnessMeterProcessor AudioWorklet.
+ * Exposes contiguous 400ms Momentary, 3s Short-Term LUFS, sample peak, and validity flags.
  */
 
+const registeredContexts = new WeakSet();
+
 export class LoudnessMeter {
+  /**
+   * Idempotently register the AudioWorklet processor module on an AudioContext
+   * @param {AudioContext} audioCtx
+   * @param {string} [workletUrl]
+   */
+  static async initWorklet(audioCtx, workletUrl = null) {
+    if (!audioCtx || !audioCtx.audioWorklet) {
+      return;
+    }
+    if (registeredContexts.has(audioCtx)) {
+      return;
+    }
+
+    let url = workletUrl;
+    if (!url) {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.getURL) {
+        url = chrome.runtime.getURL('src/engine/worklets/loudness-meter-processor.js');
+      } else {
+        url = '/src/engine/worklets/loudness-meter-processor.js';
+      }
+    }
+
+    await audioCtx.audioWorklet.addModule(url);
+    registeredContexts.add(audioCtx);
+  }
+
   constructor(audioContext, options = {}) {
     this.audioCtx = audioContext;
-    this.sampleRate = this.audioCtx.sampleRate || 48000;
+    this.channelCount = options.channelCount ?? 2;
+    this.sampleRate = this.audioCtx?.sampleRate ?? 48000;
+    this.isOutput = Boolean(options.isOutput);
 
-    // Analyser node connected to the output of K-weighting filter
-    this.analyser = this.audioCtx.createAnalyser();
-    this.analyser.fftSize = options.fftSize ?? 2048;
-    this.buffer = new Float32Array(this.analyser.fftSize);
+    this.latestMetrics = {
+      momentaryLufs: -100.0,
+      shortTermLufs: -100.0,
+      momentaryValid: false,
+      shortTermValid: false,
+      samplePeakDbFS: -100.0,
+      peakDbFS: -100.0,
+      sampleRate: this.sampleRate,
+      channelCount: this.channelCount,
+      measurementTimestamp: Date.now(),
+      measurementSequence: 0
+    };
 
-    // Sliding ring buffer for Short-Term Loudness (~3 seconds)
-    // 3 seconds @ 100ms update intervals = 30 slices
-    this.maxSlices = 30;
-    this.meanSquares = [];
+    if (this.audioCtx?.audioWorklet && typeof AudioWorkletNode !== 'undefined') {
+      this.workletNode = new AudioWorkletNode(this.audioCtx, 'loudness-meter-processor', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [this.channelCount],
+        processorOptions: {
+          sampleRate: this.sampleRate,
+          channelCount: this.channelCount
+        }
+      });
 
-    this.lastMomentaryLufs = -100;
-    this.lastShortTermLufs = -100;
-    this.lastPeakDbFS = -100;
-    this.lastMeasureTime = Date.now();
+      this.workletNode.port.onmessage = (event) => {
+        if (event.data?.type === 'measurement' && event.data.metrics) {
+          const m = event.data.metrics;
+          this.latestMetrics = {
+            ...m,
+            peakDbFS: m.samplePeakDbFS // compatibility alias
+          };
+        }
+      };
+    } else {
+      // Mock / fallback node for non-browser unit test environments
+      this.workletNode = {
+        connect() {},
+        disconnect() {},
+        port: {
+          postMessage() {}
+        }
+      };
+    }
   }
 
   getNode() {
-    return this.analyser;
-  }
-
-  /**
-   * Sample the buffer and compute Momentary (400ms) and Short-Term (3s) LUFS
-   */
-  measure() {
-    this.analyser.getFloatTimeDomainData(this.buffer);
-
-    let sumSquares = 0;
-    let peakVal = 0;
-    const len = this.buffer.length;
-
-    for (let i = 0; i < len; i++) {
-      const s = this.buffer[i];
-      const absS = Math.abs(s);
-      if (absS > peakVal) peakVal = absS;
-      sumSquares += s * s;
-    }
-
-    const meanSquare = sumSquares / len;
-
-    // Maintain sliding history for Short-Term (3s)
-    this.meanSquares.push(meanSquare);
-    if (this.meanSquares.length > this.maxSlices) {
-      this.meanSquares.shift();
-    }
-
-    // 1. Momentary LUFS (last ~400ms, approx last 4 slices)
-    const recentSlices = this.meanSquares.slice(-4);
-    const mMeanSquare = recentSlices.reduce((a, b) => a + b, 0) / (recentSlices.length || 1);
-    this.lastMomentaryLufs = this.calculateLufs(mMeanSquare);
-
-    // 2. Short-Term LUFS (last 3s, all slices)
-    const stMeanSquare = this.meanSquares.reduce((a, b) => a + b, 0) / this.meanSquares.length;
-    this.lastShortTermLufs = this.calculateLufs(stMeanSquare);
-
-    // 3. Peak dBFS
-    this.lastPeakDbFS = peakVal > 1e-5 ? Number((20 * Math.log10(peakVal)).toFixed(1)) : -100;
-    this.lastMeasureTime = Date.now();
-
-    return {
-      momentaryLufs: this.lastMomentaryLufs,
-      shortTermLufs: this.lastShortTermLufs,
-      peakDbFS: this.lastPeakDbFS,
-      timestamp: this.lastMeasureTime
-    };
-  }
-
-  /**
-   * BS.1770 LUFS formula: -0.691 + 10 * log10(meanSquare)
-   */
-  calculateLufs(meanSquare) {
-    if (!meanSquare || meanSquare < 1e-10) {
-      return -100;
-    }
-    const lufs = -0.691 + 10 * Math.log10(meanSquare);
-    return Number(Math.max(-100, Math.min(0, lufs)).toFixed(1));
+    return this.workletNode;
   }
 
   getMetrics() {
-    return {
-      momentaryLufs: this.lastMomentaryLufs,
-      shortTermLufs: this.lastShortTermLufs,
-      peakDbFS: this.lastPeakDbFS,
-      timestamp: this.lastMeasureTime
+    return { ...this.latestMetrics };
+  }
+
+  /**
+   * Return latest continuous metrics snapshot (compatibility wrapper for periodic polling)
+   */
+  measure() {
+    return this.getMetrics();
+  }
+
+  /**
+   * Reset epoch upon activity resume (invalidates short-term window to avoid silence contamination)
+   */
+  resetEpoch() {
+    if (this.workletNode?.port?.postMessage) {
+      this.workletNode.port.postMessage({ type: 'resetEpoch' });
+    }
+    this.latestMetrics.momentaryValid = false;
+    this.latestMetrics.shortTermValid = false;
+  }
+
+  /**
+   * Reset all filter states and sliding window history
+   */
+  reset() {
+    if (this.workletNode?.port?.postMessage) {
+      this.workletNode.port.postMessage({ type: 'reset' });
+    }
+    this.latestMetrics = {
+      momentaryLufs: -100.0,
+      shortTermLufs: -100.0,
+      momentaryValid: false,
+      shortTermValid: false,
+      samplePeakDbFS: -100.0,
+      peakDbFS: -100.0,
+      sampleRate: this.sampleRate,
+      channelCount: this.channelCount,
+      measurementTimestamp: Date.now(),
+      measurementSequence: 0
     };
   }
 
   disconnect() {
     try {
-      this.analyser.disconnect();
+      if (this.workletNode?.disconnect) {
+        this.workletNode.disconnect();
+      }
     } catch (_) {}
   }
 }

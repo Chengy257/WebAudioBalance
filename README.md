@@ -20,17 +20,18 @@ The current product direction retains the validated Chromium extension architect
 
 ## 2. Current Development Status
 
-The authoritative current plan is [`docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`](docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md).
+The authoritative current plan is [`docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`](docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md). The frozen R1 engineering handoff is [`docs/planning/R1_AUDIO_CORE_CORRECTION_IMPLEMENTATION_SPEC.md`](docs/planning/R1_AUDIO_CORE_CORRECTION_IMPLEMENTATION_SPEC.md).
 
 The original P0–P6 cycle and its validation reports are retained as historical engineering records. Their previous **GO / RELEASE READY** decisions do not satisfy the post-v1 release gate. Historical test counts must not be interpreted as proof that the current product achieves reliable absolute cross-tab loudness balancing.
 
 Current correction mainline:
 
 ```text
-R0  Functional Rebaseline            COMPLETE / FROZEN
-R1  Audio Core Correction            NEXT
-R2  Runtime & State Reliability      PLANNED
-R3  Product UX & Real-world Validation PLANNED
+R0  Functional Rebaseline              COMPLETE / FROZEN
+R1  Audio Core Correction Spec          COMPLETE / FROZEN
+R1  Audio Core Implementation           NEXT
+R2  Runtime & State Reliability         PLANNED
+R3  Product UX & Real-world Validation  PLANNED
 ```
 
 ## 3. Historical P0–P6 Development Record

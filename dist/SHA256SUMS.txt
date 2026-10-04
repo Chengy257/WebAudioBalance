@@ -1,0 +1,3 @@
+f36f850459db154dd74c489215a4ca523486fb9c3785750ac2909fd84757f0d9  webaudiobalance-v1.0.0.crx
+cb0d30a1a1688bf4cb59e9557dd60310afdc992c21b1250b3e4a0ab3cb4d6a29  webaudiobalance-v1.0.0.pem
+539c4c3cee2bb9a3923594e7c0e7e0a5c0a1e86cc93d5915041cb0ed28c587e2  webaudiobalance-v1.0.0.zip

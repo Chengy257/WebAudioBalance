@@ -2,7 +2,10 @@
 node_modules/
 
 # Build output
-dist/
+dist/*
+!dist/webaudiobalance-*.zip
+!dist/webaudiobalance-*.crx
+!dist/SHA256SUMS.txt
 build/
 coverage/
 

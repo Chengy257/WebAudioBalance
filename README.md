@@ -1,7 +1,7 @@
 # WebAudioBalance
 
-> **Version 1.0.0** — Production Release Ready  
-> Perceptual loudness normalization and independent per-tab audio balance across browser tabs for Google Chrome and Microsoft Edge (Chromium Manifest V3).
+> **Current Status: Post-v1 Functional Rebaseline — R0 FROZEN**  
+> The previous v1.0.0 release-ready conclusion has been superseded after real-use review identified core normalization, runtime-state, UI interaction, and validation-evidence defects. The Chromium MV3 architecture is retained while the product is corrected and revalidated.
 
 ---
 
@@ -18,7 +18,22 @@ Unlike traditional browser extensions that rely on simplistic global peak limite
 
 ---
 
-## 2. Gate-Driven Development Status
+## 2. Current Development Status
+
+The authoritative current plan is [`docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`](docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md).
+
+The original P0–P6 cycle and its validation reports are retained as historical engineering records. Their previous **GO / RELEASE READY** decisions do not satisfy the post-v1 release gate. Historical test counts must not be interpreted as proof that the current product achieves reliable absolute cross-tab loudness balancing.
+
+Current correction mainline:
+
+```text
+R0  Functional Rebaseline            COMPLETE / FROZEN
+R1  Audio Core Correction            NEXT
+R2  Runtime & State Reliability      PLANNED
+R3  Product UX & Real-world Validation PLANNED
+```
+
+## 3. Historical P0–P6 Development Record
 
 All development phases outlined in [`docs/PROJECT_MAINLINE_PLAN.md`](docs/PROJECT_MAINLINE_PLAN.md) have been systematically implemented, verified, and concluded with unanimous **GO** gate decisions:
 
@@ -35,7 +50,7 @@ All development phases outlined in [`docs/PROJECT_MAINLINE_PLAN.md`](docs/PROJEC
 
 ---
 
-## 3. Architecture
+## 4. Architecture
 
 ```text
 [ Browser Tab Events / User Gestures ]
@@ -70,16 +85,16 @@ All development phases outlined in [`docs/PROJECT_MAINLINE_PLAN.md`](docs/PROJEC
 
 ---
 
-## 4. Installation & Usage
+## 5. Installation & Usage
 
-### 4.1 Loading the Extension
+### 5.1 Loading the Extension
 
 1. Open **Google Chrome** (`chrome://extensions/`) or **Microsoft Edge** (`edge://extensions/`);
 2. Enable **Developer mode** (top right in Chrome, left sidebar in Edge);
 3. Click **Load unpacked**;
 4. Select the project root directory: `d:\CHATGPT_WORKSPACE\WebAudioBalance`.
 
-### 4.2 How to Balance Audio
+### 5.2 Historical v1 Usage Flow
 
 1. Navigate to any website playing audio (e.g. YouTube, Twitch, Bilibili, Spotify Web);
 2. Click the **WebAudioBalance** extension icon in your browser toolbar;
@@ -94,7 +109,7 @@ All development phases outlined in [`docs/PROJECT_MAINLINE_PLAN.md`](docs/PROJEC
 
 ---
 
-## 5. Automated Verification
+## 6. Historical Automated Verification
 
 Run all test suites locally with Node.js:
 
@@ -110,7 +125,7 @@ node test/test-p6-release.mjs
 
 ---
 
-## 6. Authoritative Documentation
+## 7. Documentation
 
 - [`docs/PROJECT_MAINLINE_PLAN.md`](docs/PROJECT_MAINLINE_PLAN.md): Core frozen architecture and mainline scope.
 - [`docs/planning/`](docs/planning/): Implementation specifications for phases P1 through P6.
@@ -119,6 +134,6 @@ node test/test-p6-release.mjs
 
 ---
 
-## 7. License
+## 8. License
 
 License selection is intentionally deferred until the project owner chooses the distribution license.

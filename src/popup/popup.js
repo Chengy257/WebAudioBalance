@@ -627,8 +627,12 @@ function handleMetricsUpdate(metrics) {
       Object.assign(tab.audio, metrics);
     }
     if (tab.runtime) {
-      if (metrics.active !== undefined) tab.runtime.active = metrics.active;
-      if (metrics.isLimited !== undefined) tab.runtime.limited = metrics.isLimited;
+      const activeVal = metrics.active !== undefined ? metrics.active : metrics.isActive;
+      if (activeVal !== undefined) tab.runtime.active = Boolean(activeVal);
+      const limitedVal = metrics.limited !== undefined ? metrics.limited : metrics.isLimited;
+      if (limitedVal !== undefined) tab.runtime.limited = Boolean(limitedVal);
+      const frozenVal = metrics.frozen !== undefined ? metrics.frozen : metrics.isFrozen;
+      if (frozenVal !== undefined) tab.runtime.frozen = Boolean(frozenVal);
       if (metrics.limitReason !== undefined) tab.runtime.limitReason = metrics.limitReason;
       if (metrics.captured !== undefined) tab.runtime.captured = metrics.captured;
     }

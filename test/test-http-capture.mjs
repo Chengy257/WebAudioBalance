@@ -43,6 +43,8 @@ async function runTest() {
     `--remote-debugging-port=${CDP_PORT}`,
     `--user-data-dir=${tmpDir}`,
     `--load-extension=${EXTENSION_PATH}`,
+    '--allowlisted-extension-id=gfkjhobklaikenpabhmeppdcggojmohd',
+    '--whitelisted-extension-id=gfkjhobklaikenpabhmeppdcggojmohd',
     '--no-first-run',
     '--no-default-browser-check',
     testUrl
@@ -95,12 +97,25 @@ async function runTest() {
           if (!target) return { error: 'Tab not found', tabs };
           console.log('Target tab from tabs.query:', target.id, target.url);
 
+          let streamId = null;
+          let streamErr = null;
+          try {
+            streamId = await new Promise((resolve, reject) => {
+              chrome.tabCapture.getMediaStreamId({ targetTabId: target.id }, (id) => {
+                if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+                else resolve(id);
+              });
+            });
+          } catch (e) {
+            streamErr = e.message;
+          }
+
           const res = await chrome.runtime.sendMessage({
             type: 'START_CAPTURE',
             target: 'service_worker',
-            payload: { tabId: target.id }
+            payload: { tabId: target.id, streamId }
           });
-          return { res, targetTabId: target.id };
+          return { res, streamId, streamErr, targetTabId: target.id };
         })()
       `,
       returnByValue: true

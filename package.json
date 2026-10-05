@@ -1,6 +1,6 @@
 {
   "name": "webaudiobalance",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "description": "Cross-tab perceptual loudness normalization and independent per-tab audio control for Chrome and Edge",
   "type": "module",
   "scripts": {
@@ -15,8 +15,12 @@
     "test:r3": "node test/test-r3-ui.mjs",
     "test:r3:e2e": "node test/run-r3-popup-e2e.mjs",
     "test:r3:compat": "node test/run-r3-compatibility.mjs",
-    "test:all": "node test/test-r1-audio-core.mjs && node test/test-r2-runtime-state.mjs && node test/test-r3-ui.mjs && node test/test-p1-engine.mjs && node test/test-p2-normalization.mjs && node test/test-p3-orchestration.mjs && node test/test-p4-ui.mjs && node test/test-p5-compatibility.mjs && node test/test-p6-release.mjs",
-    "test:cdp": "node test/inspect-cdp.mjs"
+    "test:fc1:e2e": "node test/run-fc1-production-e2e.mjs",
+    "test:fc2:compat": "node test/run-r3-compatibility.mjs",
+    "test:fc3:soak": "node test/run-fc3-soak.mjs",
+    "test:all": "npm test",
+    "test:cdp": "node test/inspect-cdp.mjs",
+    "package": "node scripts/package-release.mjs"
   },
   "keywords": [
     "chrome-extension",

@@ -379,9 +379,12 @@ export class ManagedTabRegistry {
     if (metrics.measurementSequence !== undefined) tab.audio.metricsSequence = metrics.measurementSequence;
     else if (metrics.metricsSequence !== undefined) tab.audio.metricsSequence = metrics.metricsSequence;
 
-    if (metrics.isActive !== undefined) tab.runtime.active = Boolean(metrics.isActive);
-    if (metrics.isFrozen !== undefined) tab.runtime.frozen = Boolean(metrics.isFrozen);
-    if (metrics.isLimited !== undefined) tab.runtime.limited = Boolean(metrics.isLimited);
+    if (metrics.active !== undefined) tab.runtime.active = Boolean(metrics.active);
+    else if (metrics.isActive !== undefined) tab.runtime.active = Boolean(metrics.isActive);
+    if (metrics.frozen !== undefined) tab.runtime.frozen = Boolean(metrics.frozen);
+    else if (metrics.isFrozen !== undefined) tab.runtime.frozen = Boolean(metrics.isFrozen);
+    if (metrics.limited !== undefined) tab.runtime.limited = Boolean(metrics.limited);
+    else if (metrics.isLimited !== undefined) tab.runtime.limited = Boolean(metrics.isLimited);
     if (metrics.limitReason !== undefined) tab.runtime.limitReason = metrics.limitReason;
     if (metrics.audioContextState !== undefined) tab.runtime.audioContextState = metrics.audioContextState;
 

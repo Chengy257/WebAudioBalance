@@ -83,10 +83,26 @@ console.log('\n--- 3. MultiTabCoordinator & Multi-Tab Isolation ---');
 
 // Mock chrome.runtime for Node environment
 const dispatchedMessages = [];
+const activeEngines = new Map();
 globalThis.chrome = {
   runtime: {
     sendMessage: async (msg) => {
       dispatchedMessages.push(msg);
+      const tabId = msg.payload?.tabId ?? msg.tabId;
+      if (msg.type === 'GET_AUDIO_RUNTIME_SNAPSHOT' || msg.type === 'AUDIO_RUNTIME_QUERY') {
+        return {
+          runtimeInstanceId: 'inst-p3',
+          engines: Array.from(activeEngines.values())
+        };
+      }
+      if (msg.type === 'START_CAPTURE' || msg.type === 'START_ENGINE' || msg.type === 'AUDIO_ENGINE_START') {
+        activeEngines.set(tabId, { tabId, engineState: 'RUNNING', audioContextState: 'running' });
+        return { success: true, tabId, engineState: 'RUNNING' };
+      }
+      if (msg.type === 'STOP_CAPTURE' || msg.type === 'STOP_ENGINE' || msg.type === 'AUDIO_ENGINE_STOP') {
+        activeEngines.delete(tabId);
+        return { success: true, tabId };
+      }
       return { success: true };
     }
   },
@@ -142,7 +158,7 @@ await coordinator.setGlobalTargetLufs(-16.0);
 assert(coordinator.settings.globalTargetLufs === -16.0, 'Global target updated to -16.0 LUFS');
 
 // Close Tab 101
-coordinator.handleTabClosed(101);
+await coordinator.handleTabClosed(101);
 assert(coordinator.registry.getTab(101) === null, 'Tab 101 removed cleanly on tab close');
 assert(coordinator.registry.getTab(102) !== null, 'Tab 102 continues running undisturbed');
 

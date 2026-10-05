@@ -219,8 +219,11 @@ export class AudioEngine {
       gainErrorDb: ctrlState.gainErrorDb,
 
       outputTargetErrorLu,
+      active: activity.isActive,
       isActive: activity.isActive,
+      frozen: ctrlState.isFrozen,
       isFrozen: ctrlState.isFrozen,
+      limited: ctrlState.isLimited,
       isLimited: ctrlState.isLimited,
       limitReason: ctrlState.limitReason,
       hasValidSafetyPeak: ctrlState.hasValidSafetyPeak,

@@ -47,7 +47,7 @@ async function runTests() {
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   assert(manifest.manifest_version === 3, 'manifest_version is 3 (Chromium MV3)');
-  assert(manifest.version === '1.0.0', 'version bumped to 1.0.0 for release');
+  assert(manifest.version === '1.1.0', 'version bumped to 1.1.0 for release');
   assert(manifest.name === 'WebAudioBalance', 'Product name is WebAudioBalance');
 
   const requiredPermissions = ['tabCapture', 'offscreen', 'tabs', 'activeTab', 'contextMenus', 'storage'];

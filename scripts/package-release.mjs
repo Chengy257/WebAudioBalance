@@ -1,9 +1,9 @@
 /**
  * WebAudioBalance - Automated Release Packaging Script
  * Generates:
- * 1. dist/webaudiobalance-v1.0.0.zip (Chrome Web Store / Edge Add-ons upload & manual load)
- * 2. dist/webaudiobalance-v1.0.0.crx (Direct installable Chromium CRX package)
- * 3. dist/webaudiobalance-v1.0.0.pem (Signing key for enterprise / self-distribution)
+ * 1. dist/webaudiobalance-v1.1.0.zip (Chrome Web Store / Edge Add-ons upload & manual load)
+ * 2. dist/webaudiobalance-v1.1.0.crx (Direct installable Chromium CRX package)
+ * 3. dist/webaudiobalance-v1.1.0.pem (Signing key for enterprise / self-distribution)
  * 4. SHA-256 release checksum manifest
  */
 
@@ -15,7 +15,7 @@ import { execFileSync } from 'child_process';
 const ROOT_DIR = path.resolve('.');
 const DIST_DIR = path.resolve('dist');
 const UNPACKED_DIR = path.resolve('dist/unpacked');
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 console.log(`Packaging WebAudioBalance v${VERSION}...`);
 
@@ -31,9 +31,10 @@ fs.cpSync(path.join(ROOT_DIR, 'assets'), path.join(UNPACKED_DIR, 'assets'), { re
 fs.cpSync(path.join(ROOT_DIR, 'src'), path.join(UNPACKED_DIR, 'src'), { recursive: true });
 console.log('Staged runtime files into dist/unpacked/');
 
-// 3. Create Distribution ZIP archive using Windows built-in tar.exe
+// 3. Create Distribution ZIP archive using built-in tar
 const zipPath = path.join(DIST_DIR, `webaudiobalance-v${VERSION}.zip`);
-execFileSync('tar.exe', [
+const tarCmd = process.platform === 'win32' ? 'tar.exe' : 'tar';
+execFileSync(tarCmd, [
   '-a',
   '-cf',
   zipPath,
@@ -48,7 +49,11 @@ const chromeCandidates = [
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe'
+  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 ];
 
 let browserExe = chromeCandidates.find((p) => fs.existsSync(p));

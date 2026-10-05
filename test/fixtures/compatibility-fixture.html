@@ -47,57 +47,57 @@
   <div class="grid">
     <!-- Category 1: HTML5 Audio/Video -->
     <div class="card" id="card-1">
-      <h3>1. HTML5 Audio / Video</h3>
+      <h3>1. HTML5 Audio / Video Fixture</h3>
       <p>Native &lt;audio&gt; / &lt;video&gt; media element playback pipeline.</p>
       <button class="btn" id="btn-html5">Start HTML5 Audio</button>
       <audio id="audio-html5" loop></audio>
       <div class="status-text" id="status-html5">Inactive</div>
     </div>
 
-    <!-- Category 2: YouTube / MSE VOD -->
+    <!-- Category 2: MSE VOD-like -->
     <div class="card" id="card-2">
-      <h3>2. YouTube / MSE VOD</h3>
+      <h3>2. MSE VOD-like Fixture</h3>
       <p>MediaSource Extensions with adaptive chunk buffer appends.</p>
       <button class="btn" id="btn-mse-vod">Start MSE VOD</button>
       <audio id="audio-mse-vod"></audio>
       <div class="status-text" id="status-mse-vod">Inactive</div>
     </div>
 
-    <!-- Category 3: Bilibili / Segmented MSE Source -->
+    <!-- Category 3: Segmented MSE DASH-like -->
     <div class="card" id="card-3">
-      <h3>3. Bilibili / Segmented MSE</h3>
+      <h3>3. Segmented MSE DASH-like Fixture</h3>
       <p>Segmented DASH/FLV audio pipeline across sequential track chunks.</p>
       <button class="btn" id="btn-mse-dash">Start Segmented DASH</button>
       <div class="status-text" id="status-mse-dash">Inactive</div>
     </div>
 
-    <!-- Category 4: Twitch / Live Stream -->
+    <!-- Category 4: Continuous Live-Stream -->
     <div class="card" id="card-4">
-      <h3>4. Twitch / Live Stream</h3>
+      <h3>4. Continuous Live-Stream Fixture</h3>
       <p>Continuous unbounded live audio feed without EOF.</p>
       <button class="btn" id="btn-live">Start Live Stream</button>
       <div class="status-text" id="status-live">Inactive</div>
     </div>
 
-    <!-- Category 5: Spotify Web / Music Streaming -->
+    <!-- Category 5: Wide-Dynamic-Range Music -->
     <div class="card" id="card-5">
-      <h3>5. Spotify Web / Music Stream</h3>
+      <h3>5. Wide-Dynamic-Range Music Fixture</h3>
       <p>Wide dynamic range music with dense peaks (-28 LUFS to -14 LUFS).</p>
       <button class="btn" id="btn-music">Start Dynamic Music</button>
       <div class="status-text" id="status-music">Inactive</div>
     </div>
 
-    <!-- Category 6: Spoken Podcast / Dialogue -->
+    <!-- Category 6: Dialogue with Pauses -->
     <div class="card" id="card-6">
-      <h3>6. Spoken Podcast / Dialogue</h3>
+      <h3>6. Dialogue with Natural Pauses Fixture</h3>
       <p>Speech with 600ms-1200ms natural conversational pauses.</p>
       <button class="btn" id="btn-speech">Start Podcast Dialogue</button>
       <div class="status-text" id="status-speech">Inactive</div>
     </div>
 
-    <!-- Category 7: Web Audio Application -->
+    <!-- Category 7: Web Audio Graph -->
     <div class="card" id="card-7">
-      <h3>7. Web Audio Application</h3>
+      <h3>7. Web Audio Graph Application Fixture</h3>
       <p>Direct AudioContext node graph (Oscillators, BiquadFilter, Gain).</p>
       <button class="btn" id="btn-synth">Start Web Audio Synth</button>
       <div class="status-text" id="status-synth">Inactive</div>
@@ -105,25 +105,25 @@
 
     <!-- Category 8: Iframe-Hosted Media -->
     <div class="card" id="card-8">
-      <h3>8. Iframe-Hosted Media</h3>
+      <h3>8. Iframe-Hosted Embedded Media Fixture</h3>
       <p>Embedded cross-origin/subframe media player.</p>
       <button class="btn" id="btn-iframe">Start Iframe Media</button>
       <iframe id="frame-player" srcdoc="<html><body><audio id='subAudio' loop></audio><script>window.playTone = function() { const ctx = new (window.AudioContext||window.webkitAudioContext)(); const o = ctx.createOscillator(); const g = ctx.createGain(); g.gain.value = 0.2; o.frequency.value = 440; o.connect(g); g.connect(ctx.destination); o.start(); return true; };</script></body></html>"></iframe>
       <div class="status-text" id="status-iframe">Inactive</div>
     </div>
 
-    <!-- Category 9: WebRTC Receive Audio -->
+    <!-- Category 9: WebRTC Receive-like Audio -->
     <div class="card" id="card-9">
-      <h3>9. WebRTC Receive Audio</h3>
+      <h3>9. WebRTC Receive-like Audio Fixture</h3>
       <p>Real-time peer connection remote audio stream playback.</p>
       <button class="btn" id="btn-webrtc">Start WebRTC Audio</button>
       <audio id="audio-webrtc" autoplay></audio>
       <div class="status-text" id="status-webrtc">Inactive</div>
     </div>
 
-    <!-- Category 10: Protected / DRM Media -->
+    <!-- Category 10: Protected / DRM Media Boundary -->
     <div class="card" id="card-10">
-      <h3>10. Protected / DRM Content</h3>
+      <h3>10. Protected Media / DRM Boundary Constraint</h3>
       <p>Simulated EME CDM encrypted media pipeline constraint.</p>
       <button class="btn" id="btn-drm">Simulate DRM Playback</button>
       <div class="status-text" id="status-drm">Inactive</div>

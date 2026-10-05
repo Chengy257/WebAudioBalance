@@ -13,6 +13,7 @@
 The product implements an absolute perceptual loudness normalization architecture on Chromium Manifest V3:
 - **Absolute loudness target model**: each user-enabled tab independently converges toward a shared perceptual loudness target (ITU-R BS.1770 LUFS);
 - **Independent per-tab AudioEngines**: one tab's source loudness changes do not directly modulate another tab's controller;
+- **Simultaneous multi-tab processing**: parallel `tabCapture` stream acquisition and concurrent independent `AudioEngine` instances are empirically validated on both Google Chrome and Microsoft Edge (CLASS A);
 - **Relative per-tab adjustment**: the user volume slider defines an intentional offset ($\pm 12\text{ dB}$) from the shared listening target;
 - **Continuous loudness measurement and processed-output verification**: meters track both incoming source loudness and processed output loudness, maintaining safety headroom;
 - **Chromium MV3 architecture**: tab capture via `chrome.tabCapture`, Offscreen Audio Runtime (`chrome.offscreen`), Service Worker control plane with state synchronization, and a unified Chrome/Edge codebase.
@@ -134,6 +135,9 @@ npm run test:fc2:compat
 # Run continuous stability & soak test
 npm run test:fc3:soak
 
+# Run simultaneous multi-tab concurrent verification (CLASS A)
+npm run test:rc1:multitab
+
 # Build packaged release artifact
 npm run package
 ```
@@ -143,6 +147,7 @@ npm run package
 ## 7. Documentation
 
 - [`docs/planning/FINAL_CLOSEOUT_AND_V1_1_0_RELEASE_PLAN.md`](docs/planning/FINAL_CLOSEOUT_AND_V1_1_0_RELEASE_PLAN.md): Final closeout authority and release plan.
+- [`docs/planning/FINAL_RELEASE_CORRECTION_PLAN.md`](docs/planning/FINAL_RELEASE_CORRECTION_PLAN.md): Post-release evidence correction and multi-tab verification plan.
 - [`docs/validation/FINAL_CLOSEOUT_V1_1_0_RELEASE_REPORT.md`](docs/validation/FINAL_CLOSEOUT_V1_1_0_RELEASE_REPORT.md): Authoritative release validation report for v1.1.0.
 - [`docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`](docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md): Core rebaseline architecture and roadmap.
 - [`test/fixtures/compatibility-fixture.html`](test/fixtures/compatibility-fixture.html): Architectural audio fixture test harness.

@@ -18,6 +18,7 @@
     "test:fc1:e2e": "node test/run-fc1-production-e2e.mjs",
     "test:fc2:compat": "node test/run-r3-compatibility.mjs",
     "test:fc3:soak": "node test/run-fc3-soak.mjs",
+    "test:rc1:multitab": "node test/run-release-correction-multitab.mjs",
     "test:all": "npm test",
     "test:cdp": "node test/inspect-cdp.mjs",
     "package": "node scripts/package-release.mjs"

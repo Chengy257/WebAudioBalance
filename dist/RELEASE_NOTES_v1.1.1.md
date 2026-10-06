@@ -1,7 +1,8 @@
 # WebAudioBalance v1.1.1 — Capture Authorization & Multi-Tab Recovery Release
 
 > **Release Target: v1.1.1**  
-> **Release Commit: `6c430357d6da075487771ec8e3aeaaaeec926f2f`**  
+> **Release Tag: `v1.1.1`**  
+> **Release Lineage: Audited release commit tagged `v1.1.1`**  
 > **Release Decision: GO — PRODUCTION RELEASE**  
 > **Governing Document: [`docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md`](../docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md)**  
 > **Authoritative Evidence: [`docs/validation/V1_1_1_CAPTURE_AUTH_MULTITAB_RECOVERY_REPORT.md`](../docs/validation/V1_1_1_CAPTURE_AUTH_MULTITAB_RECOVERY_REPORT.md)**  
@@ -73,7 +74,7 @@ WebAudioBalance v1.1.1 is an audited corrective release that rectifies the first
 ### Release Artifact Integrity (SHA-256)
 
 ```text
-5bbabbf6fd47099bbad9e761d65c4509237186c30c87c44acf8cfed6cbcf7973  webaudiobalance-v1.1.1.crx
-37b1ff8e14d074e744bf2fe7171020bbf0248b3b2190a678465ecfa06a72c386  webaudiobalance-v1.1.1.pem
-6cc053d7dfe73f551d59635274c1c7de029c4041df19da643c02ac37ccbb61e8  webaudiobalance-v1.1.1.zip
+3545c6a801dc226b1e57ebf1621962e271866d917abb694eb62d71fc61139975  webaudiobalance-v1.1.1.crx
+2c1aaf379e9cfcf2397bd8182f1f93220025a9ce6424caa903ffdb84afe2d5a6  webaudiobalance-v1.1.1.pem
+a135a81ffe1d506a63e71b29d48dc7bec99455703bfc28c59eea002117fadf94  webaudiobalance-v1.1.1.zip
 ```

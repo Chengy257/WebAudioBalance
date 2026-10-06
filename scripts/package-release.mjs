@@ -1,9 +1,9 @@
 /**
  * WebAudioBalance - Automated Release Packaging Script
  * Generates:
- * 1. dist/webaudiobalance-v1.1.0.zip (Chrome Web Store / Edge Add-ons upload & manual load)
- * 2. dist/webaudiobalance-v1.1.0.crx (Direct installable Chromium CRX package)
- * 3. dist/webaudiobalance-v1.1.0.pem (Signing key for enterprise / self-distribution)
+ * 1. dist/webaudiobalance-v${VERSION}.zip (Chrome Web Store / Edge Add-ons upload & manual load)
+ * 2. dist/webaudiobalance-v${VERSION}.crx (Direct installable Chromium CRX package)
+ * 3. dist/webaudiobalance-v${VERSION}.pem (Signing key for enterprise / self-distribution)
  * 4. SHA-256 release checksum manifest
  */
 
@@ -106,7 +106,7 @@ function sha256(filePath) {
 const checksums = [];
 fs.readdirSync(DIST_DIR).forEach((file) => {
   const full = path.join(DIST_DIR, file);
-  if (fs.statSync(full).isFile() && !file.endsWith('.sha256')) {
+  if (fs.statSync(full).isFile() && !file.endsWith('.sha256') && file !== 'SHA256SUMS.txt') {
     const hash = sha256(full);
     checksums.push(`${hash}  ${file}`);
   }

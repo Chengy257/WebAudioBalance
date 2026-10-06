@@ -46,8 +46,9 @@ async function runTests() {
   assert(fs.existsSync(manifestPath), 'manifest.json exists');
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
   assert(manifest.manifest_version === 3, 'manifest_version is 3 (Chromium MV3)');
-  assert(manifest.version === '1.1.1', 'version bumped to 1.1.1 for release');
+  assert(manifest.version === pkg.version, `manifest version (${manifest.version}) matches package.json (${pkg.version})`);
   assert(manifest.name === 'WebAudioBalance', 'Product name is WebAudioBalance');
 
   const requiredPermissions = ['tabCapture', 'offscreen', 'tabs', 'activeTab', 'contextMenus', 'storage'];

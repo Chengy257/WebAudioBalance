@@ -22,7 +22,7 @@ The product implements an absolute perceptual loudness normalization architectur
 
 ## 2. Current Development Status
 
-The authoritative recovery plan is [`docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md`](docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md). The corrective release phase has concluded with unanimous **GO** decisions across all gates:
+The authoritative recovery and closeout plans are [`docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md`](docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md) and [`docs/planning/V1_1_1_FINAL_RELEASE_CLOSEOUT_CORRECTION_PLAN.md`](docs/planning/V1_1_1_FINAL_RELEASE_CLOSEOUT_CORRECTION_PLAN.md). The corrective release phase has concluded with unanimous **GO** decisions across all recovery and final closeout gates:
 
 ```text
 R0   Functional Rebaseline                 COMPLETE / FROZEN
@@ -31,6 +31,7 @@ R2   Runtime State & Isolation             COMPLETE / VERIFIED (84/84 tests)
 R3   Product UX & UI                       IMPLEMENTED / VERIFIED (28/28 tests)
 FC   Final Closeout & v1.1.0 Baseline      COMPLETE / AUDITED (15/15 gates GO)
 RA   Capture Auth & Multi-Tab Recovery     COMPLETE / VERIFIED (12/12 gates GO, v1.1.1)
+FR   Final Release Closeout Correction     COMPLETE / VERIFIED (12/12 gates GO, v1.1.1)
 ```
 
 The historical releases and validation records (`v1.0.0`, `v1.1.0`) are retained intact. Full empirical evidence and audited results for v1.1.1 are recorded in [`V1_1_1_CAPTURE_AUTH_MULTITAB_RECOVERY_REPORT.md`](docs/validation/V1_1_1_CAPTURE_AUTH_MULTITAB_RECOVERY_REPORT.md).
@@ -141,6 +142,7 @@ npm run verify:release
 ## 7. Documentation
 
 - [`docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md`](docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md): Authoritative capture authorization and multi-tab recovery plan.
+- [`docs/planning/V1_1_1_FINAL_RELEASE_CLOSEOUT_CORRECTION_PLAN.md`](docs/planning/V1_1_1_FINAL_RELEASE_CLOSEOUT_CORRECTION_PLAN.md): Authoritative final release closeout correction plan for v1.1.1.
 - [`docs/validation/V1_1_1_CAPTURE_AUTH_MULTITAB_RECOVERY_REPORT.md`](docs/validation/V1_1_1_CAPTURE_AUTH_MULTITAB_RECOVERY_REPORT.md): Authoritative release validation report for v1.1.1.
 - [`docs/planning/FINAL_CLOSEOUT_AND_V1_1_0_RELEASE_PLAN.md`](docs/planning/FINAL_CLOSEOUT_AND_V1_1_0_RELEASE_PLAN.md): Historical v1.1.0 closeout plan.
 - [`docs/validation/FINAL_CLOSEOUT_V1_1_0_RELEASE_REPORT.md`](docs/validation/FINAL_CLOSEOUT_V1_1_0_RELEASE_REPORT.md): Historical v1.1.0 release report.

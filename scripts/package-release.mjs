@@ -15,13 +15,18 @@ import { execFileSync } from 'child_process';
 const ROOT_DIR = path.resolve('.');
 const DIST_DIR = path.resolve('dist');
 const UNPACKED_DIR = path.resolve('dist/unpacked');
-const VERSION = '1.1.0';
+
+const manifest = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'manifest.json'), 'utf8'));
+const VERSION = manifest.version;
 
 console.log(`Packaging WebAudioBalance v${VERSION}...`);
 
-// 1. Prepare clean directories
-if (fs.existsSync(DIST_DIR)) {
-  fs.rmSync(DIST_DIR, { recursive: true, force: true });
+// 1. Prepare clean directories (preserve existing historical releases in dist/)
+if (!fs.existsSync(DIST_DIR)) {
+  fs.mkdirSync(DIST_DIR, { recursive: true });
+}
+if (fs.existsSync(UNPACKED_DIR)) {
+  fs.rmSync(UNPACKED_DIR, { recursive: true, force: true });
 }
 fs.mkdirSync(UNPACKED_DIR, { recursive: true });
 

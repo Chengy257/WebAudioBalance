@@ -1,8 +1,8 @@
 # WebAudioBalance
 
-> **Current Status: v1.1.0 — RELEASED**  
-> **Post-v1 Functional Rebaseline: COMPLETE**  
-> All 15 release gates (G1–G15) are verified across Microsoft Edge and Google Chrome under the authoritative [Final Closeout and v1.1.0 Release Plan](docs/planning/FINAL_CLOSEOUT_AND_V1_1_0_RELEASE_PLAN.md). Full verification results, test traces, and release audit are recorded in the [Final Closeout and v1.1.0 Release Report](docs/validation/FINAL_CLOSEOUT_V1_1_0_RELEASE_REPORT.md).
+> **Current Status: v1.1.1 — RELEASED**  
+> **Capture Authorization & Multi-Tab Recovery: COMPLETE**  
+> All 12 recovery gates (RA-G1–RA-G12) are verified across Microsoft Edge and Google Chrome under the authoritative [Capture Authorization and Multi-Tab Recovery Plan](docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md). Full empirical evidence, test traces, and release audit are recorded in the [v1.1.1 Recovery Report](docs/validation/V1_1_1_CAPTURE_AUTH_MULTITAB_RECOVERY_REPORT.md). Historical v1.0.0 and v1.1.0 release artifacts remain preserved.
 
 ---
 
@@ -22,39 +22,37 @@ The product implements an absolute perceptual loudness normalization architectur
 
 ## 2. Current Development Status
 
-The authoritative release plan is [`docs/planning/FINAL_CLOSEOUT_AND_V1_1_0_RELEASE_PLAN.md`](docs/planning/FINAL_CLOSEOUT_AND_V1_1_0_RELEASE_PLAN.md). The post-v1 rebaseline and final closeout phases have concluded with unanimous **GO** decisions across all gates:
+The authoritative recovery plan is [`docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md`](docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md). The corrective release phase has concluded with unanimous **GO** decisions across all gates:
 
 ```text
-R0  Functional Rebaseline                 COMPLETE / FROZEN
-R1  Audio Core Correction                 COMPLETE / VERIFIED (23/23 tests)
-R2  Runtime State & Isolation             COMPLETE / VERIFIED (84/84 tests)
-R3  Product UX & UI                       IMPLEMENTED / VERIFIED (28/28 tests)
-FC  Final Closeout & v1.1.0 Release       COMPLETE / RELEASED (15/15 gates GO)
+R0   Functional Rebaseline                 COMPLETE / FROZEN
+R1   Audio Core Correction                 COMPLETE / VERIFIED (23/23 tests)
+R2   Runtime State & Isolation             COMPLETE / VERIFIED (84/84 tests)
+R3   Product UX & UI                       IMPLEMENTED / VERIFIED (28/28 tests)
+FC   Final Closeout & v1.1.0 Baseline      COMPLETE / AUDITED (15/15 gates GO)
+RA   Capture Auth & Multi-Tab Recovery     COMPLETE / VERIFIED (12/12 gates GO, v1.1.1)
 ```
 
-The original P0–P6 cycle and early R3 reports are retained in `docs/validation/` as historical engineering records. Their previous assertions are formally superseded by the release candidate evidence in [`FINAL_CLOSEOUT_V1_1_0_RELEASE_REPORT.md`](docs/validation/FINAL_CLOSEOUT_V1_1_0_RELEASE_REPORT.md).
+The historical releases and validation records (`v1.0.0`, `v1.1.0`) are retained intact. Full empirical evidence and audited results for v1.1.1 are recorded in [`V1_1_1_CAPTURE_AUTH_MULTITAB_RECOVERY_REPORT.md`](docs/validation/V1_1_1_CAPTURE_AUTH_MULTITAB_RECOVERY_REPORT.md).
 
 ---
 
-## 3. Authoritative Release Gates (v1.1.0)
+## 3. Authoritative Recovery Gates (v1.1.1)
 
 | Gate | Scope | Target Browser / Context | Status | Decision |
 |---|---|---|:---:|:---:|
-| **G1** | R1 Audio Core Unit Suite | Pure Node.js & DSP Core | 23 / 23 PASS | **PASS** |
-| **G2** | R2 Runtime & State Reliability | Node.js Mock IPC & Coordinator | 84 / 84 PASS | **PASS** |
-| **G3** | R3 Product UX & UI Presenter | Node.js DOM / Preset Logic | 28 / 28 PASS | **PASS** |
-| **G4** | FC-1 Full-Stack Production E2E | Google Chrome (v154) | 17 / 17 Scenarios | **PASS** |
-| **G5** | FC-1 Full-Stack Production E2E | Microsoft Edge (v154) | 17 / 17 Scenarios | **PASS** |
-| **G6** | FC-2 Fixture Compatibility Matrix | Categories 1–10 (Chrome & Edge) | 18 PASS / 2 Constraints | **PASS** |
-| **G7** | FC-2 Real-Source Checks (Layer B) | YouTube, Bilibili, Twitch, Spotify | Classified Honestly | **PASS** |
-| **G8** | FC-3 Continuous Stability & Soak | Google Chrome | 0 Leaks, 0 Errors | **PASS** |
-| **G9** | FC-3 Continuous Stability & Soak | Microsoft Edge | 0 Leaks, 0 Errors | **PASS** |
-| **G10** | FC-3 Perceptual Quality Checklist | Listening Tests (8 checks) | 0 FAIL | **PASS** |
-| **G11** | FC-4 Packaged Release Artifact Load | Google Chrome (Unpacked ZIP) | Clean Load / MV3 SW OK | **PASS** |
-| **G12** | FC-4 Packaged Release Artifact Load | Microsoft Edge (Unpacked ZIP) | Clean Load / MV3 SW OK | **PASS** |
-| **G13** | FC-4 Version & Metadata Consistency | manifest 1.1.0, pkg 1.1.0, tags | Consistent | **PASS** |
-| **G14** | FC-4 Core CI Workflow | GitHub Actions (Ubuntu/Node 20) | Active & Configured | **PASS** |
-| **G15** | FC-5 Independent Final Release Audit | Repository & Evidence Audit | 0 Deficiencies | **GO** |
+| **RA-G1** | Current-Tab Popup Authorization | Google Chrome (v154) | Direct Popup Invocation | **PASS** |
+| **RA-G2** | Current-Tab Popup Authorization | Microsoft Edge (v154) | Direct Popup Invocation | **PASS** |
+| **RA-G3** | Background Uninvoked Tab Behavior | Chrome & Edge | Rejects unauthorized capture; shows Switch to Tab | **PASS** |
+| **RA-G4** | Context-Menu Authorization | Chrome & Edge | Invocation under direct user gesture | **PASS** |
+| **RA-G5** | Unsupported-Page Classification | Chrome & Edge | Clear non-capturable UX (`chrome://`, `edge://`, stores) | **PASS** |
+| **RA-G6** | No Stale Managed State on Auth Failure | MultiTabCoordinator & State Registry | Immediate rollback, clean unmanaged state | **PASS** |
+| **RA-G7** | Real User-Path Browser Acceptance | Chrome & Edge (No test flags) | Verified across activeTab boundaries | **PASS** |
+| **RA-G8** | Simultaneous Multi-Tab Experiment | Google Chrome & Microsoft Edge | CLASS A (Concurrent multi-tab supported) | **PASS** |
+| **RA-G9** | Controller & Lifecycle Isolation | Concurrent Audio Engines | Independent gain offsets, isolated release | **PASS** |
+| **RA-G10** | Package & Metadata Consistency | manifest 1.1.1, pkg 1.1.1, dist artifacts | Aligned v1.1.1 | **PASS** |
+| **RA-G11** | Regression Unit & Runtime Suites | R1, R2, R3, RA Suites | 137 / 137 PASS (100%) | **PASS** |
+| **RA-G12** | Independent Recovery Audit | Codebase, Artifacts, Evidence | 0 Deficiencies | **GO** |
 
 ---
 
@@ -97,7 +95,7 @@ The original P0–P6 cycle and early R3 reports are retained in `docs/validation
 
 ### 5.1 Loading the Extension
 
-1. Download `webaudiobalance-v1.1.0.zip` from [GitHub Releases](https://github.com/Chengy257/WebAudioBalance/releases/tag/v1.1.0) and extract it;
+1. Download `webaudiobalance-v1.1.1.zip` from [GitHub Releases](https://github.com/Chengy257/WebAudioBalance/releases/tag/v1.1.1) and extract it;
 2. Open **Google Chrome** (`chrome://extensions/`) or **Microsoft Edge** (`edge://extensions/`);
 3. Enable **Developer mode**;
 4. Click **Load unpacked**;
@@ -105,16 +103,18 @@ The original P0–P6 cycle and early R3 reports are retained in `docs/validation
 
 ### 5.2 Usage Flow
 
-1. Navigate to any tab playing audio (e.g. YouTube, Twitch, Bilibili, Spotify Web);
-2. Click the **WebAudioBalance** extension icon in your browser toolbar;
-3. Select your desired **Listening Level**:
+> **Important Workflow Note**: To enable a new tab, switch to that tab and invoke WebAudioBalance there. Once enabled, the tab can be managed centrally with other enabled tabs. Multiple independently authorized tabs remain balanced simultaneously (**CLASS A — Simultaneous Multi-Tab Supported**).
+
+1. **Activate the Target Tab**: Navigate to the tab playing audio (e.g. YouTube, Twitch, Bilibili, Spotify Web);
+2. **Invoke WebAudioBalance**: Click the extension icon in your browser toolbar (or right-click the page and choose **"WebAudioBalance: Balance this tab"**);
+3. **Balance the Current Tab**: Under **Current Tab**, click **[ Balance This Tab ]** to start real-time loudness balancing;
+4. **Manage Across Tabs**:
+   - All active balanced tabs appear in **Balanced Tabs**, showing their live status (Balancing, Balanced, Paused, Limited), relative offset slider ($\pm 12\text{ dB}$), and Auto-Balance switch.
+   - Other audible tabs are discovered and displayed under **Other Audio Tabs** with a convenient **[ Switch to Tab ]** button, directing you to switch to that tab and invoke the extension.
+5. **Adjust Listening Levels**:
    - **Quiet**: $-24\text{ LUFS}$ (relaxed late-night listening)
    - **Normal**: $-18\text{ LUFS}$ (standard streaming default)
    - **Loud**: $-14\text{ LUFS}$ (high clarity for dialogue & podcasts)
-4. Under **Detected Audio Tabs**, click **Balance** next to the tab;
-5. The tab moves into **Managed Tabs**, where its loudness converges smoothly toward your target. You can adjust the Relative Level slider ($\pm 12\text{ dB}$) or double-click to reset to $0\text{ dB}$.
-
-*Tip:* You can also right-click anywhere on any page and choose **"WebAudioBalance: Balance this tab"**.
 
 ---
 
@@ -123,32 +123,27 @@ The original P0–P6 cycle and early R3 reports are retained in `docs/validation
 Run core test suites locally with Node.js:
 
 ```bash
-# Run core test suites (R1, R2, R3 unit suites - 135 tests)
+# Run all unit and regression test suites (R1, R2, R3, RA - 137 tests)
 npm test
 
-# Run full-stack production E2E (17 production lifecycle scenarios)
-npm run test:fc1:e2e
-
-# Run architectural fixture compatibility suite (Categories 1-10)
-npm run test:fc2:compat
-
-# Run continuous stability & soak test
-npm run test:fc3:soak
-
-# Run simultaneous multi-tab concurrent verification (CLASS A)
+# Run simultaneous multi-tab concurrent verification (CLASS A across Chrome & Edge)
 npm run test:rc1:multitab
 
-# Build packaged release artifact
+# Build packaged release artifacts (ZIP, CRX, SHA256 checksums)
 npm run package
+
+# Verify packaged release artifact loads in Chrome & Edge
+npm run verify:release
 ```
 
 ---
 
 ## 7. Documentation
 
-- [`docs/planning/FINAL_CLOSEOUT_AND_V1_1_0_RELEASE_PLAN.md`](docs/planning/FINAL_CLOSEOUT_AND_V1_1_0_RELEASE_PLAN.md): Final closeout authority and release plan.
-- [`docs/planning/FINAL_RELEASE_CORRECTION_PLAN.md`](docs/planning/FINAL_RELEASE_CORRECTION_PLAN.md): Post-release evidence correction and multi-tab verification plan.
-- [`docs/validation/FINAL_CLOSEOUT_V1_1_0_RELEASE_REPORT.md`](docs/validation/FINAL_CLOSEOUT_V1_1_0_RELEASE_REPORT.md): Authoritative release validation report for v1.1.0.
+- [`docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md`](docs/planning/CAPTURE_AUTHORIZATION_AND_MULTITAB_RECOVERY_PLAN.md): Authoritative capture authorization and multi-tab recovery plan.
+- [`docs/validation/V1_1_1_CAPTURE_AUTH_MULTITAB_RECOVERY_REPORT.md`](docs/validation/V1_1_1_CAPTURE_AUTH_MULTITAB_RECOVERY_REPORT.md): Authoritative release validation report for v1.1.1.
+- [`docs/planning/FINAL_CLOSEOUT_AND_V1_1_0_RELEASE_PLAN.md`](docs/planning/FINAL_CLOSEOUT_AND_V1_1_0_RELEASE_PLAN.md): Historical v1.1.0 closeout plan.
+- [`docs/validation/FINAL_CLOSEOUT_V1_1_0_RELEASE_REPORT.md`](docs/validation/FINAL_CLOSEOUT_V1_1_0_RELEASE_REPORT.md): Historical v1.1.0 release report.
 - [`docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md`](docs/planning/POST_V1_FUNCTIONAL_REBASELINE_PLAN.md): Core rebaseline architecture and roadmap.
 - [`test/fixtures/compatibility-fixture.html`](test/fixtures/compatibility-fixture.html): Architectural audio fixture test harness.
 

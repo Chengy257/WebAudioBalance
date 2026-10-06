@@ -10,7 +10,8 @@ import path from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 
-const VERSION = '1.1.0';
+const rootManifest = JSON.parse(fs.readFileSync(path.resolve('manifest.json'), 'utf8'));
+const VERSION = process.env.WAB_VERSION || rootManifest.version;
 const DIST_DIR = path.resolve('dist');
 const ZIP_PATH = path.join(DIST_DIR, `webaudiobalance-v${VERSION}.zip`);
 const VERIFY_DIR = path.join(tmpdir(), `wab_verify_artifact_${Date.now()}`);

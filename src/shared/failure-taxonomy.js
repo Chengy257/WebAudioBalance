@@ -18,6 +18,7 @@ export const FailureTaxonomy = Object.freeze({
 export const ErrorCodes = Object.freeze({
   UNSUPPORTED_TAB: 'UNSUPPORTED_TAB',
   STREAM_ID_ACQUISITION_FAILED: 'STREAM_ID_ACQUISITION_FAILED',
+  CAPTURE_AUTHORIZATION_REQUIRED: 'CAPTURE_AUTHORIZATION_REQUIRED',
   OFFSCREEN_UNAVAILABLE: 'OFFSCREEN_UNAVAILABLE',
   AUDIO_ENGINE_START_FAILED: 'AUDIO_ENGINE_START_FAILED',
   AUDIO_ENGINE_NOT_FOUND: 'AUDIO_ENGINE_NOT_FOUND',
@@ -55,24 +56,45 @@ export function createRuntimeError(code, message, options = {}) {
  * @returns {{ category: string, userMessage: string, actionable: boolean }}
  */
 export function classifyFailure(error, context = {}) {
-  const errMsg = typeof error === 'string' ? error : (error?.message || '');
+  const errMsg = typeof error === 'string' ? error : (error?.message || error?.code || '');
+  const errCode = error?.code || '';
   const url = context.url || '';
 
-  // 1. Browser-specific URL restrictions
-  if (url.startsWith('chrome://') || url.startsWith('edge://') || url.startsWith('chrome-extension://')) {
+  // 1. Browser-specific URL restrictions & unsupported pages (Section 4.7 & 5.5)
+  if (
+    errCode === ErrorCodes.UNSUPPORTED_TAB ||
+    url.startsWith('chrome://') ||
+    url.startsWith('edge://') ||
+    url.startsWith('chrome-extension://') ||
+    url.startsWith('about:') ||
+    url.startsWith('view-source:') ||
+    url.includes('chrome.google.com/webstore') ||
+    url.includes('chromewebstore.google.com') ||
+    url.includes('microsoftedge.microsoft.com/addons') ||
+    errMsg.includes('Chrome pages cannot be captured') ||
+    errMsg.includes('cannot be captured') ||
+    errMsg.includes('security restrictions')
+  ) {
     return {
       category: FailureTaxonomy.BROWSER_SPECIFIC_FAILURE,
-      userMessage: 'Browser internal pages cannot be captured due to platform security rules.',
+      userMessage: 'This browser page cannot be captured.',
       actionable: false
     };
   }
 
-  // 2. Web Store policies
-  if (url.includes('chrome.google.com/webstore') || url.includes('microsoftedge.microsoft.com/addons')) {
+  // 2. Authorization / User Activation Required (Section 4.5 & 5.5)
+  if (
+    errCode === ErrorCodes.CAPTURE_AUTHORIZATION_REQUIRED ||
+    errMsg.includes('CAPTURE_AUTHORIZATION_REQUIRED') ||
+    errMsg.includes('Extension has not been invoked') ||
+    errMsg.includes('activeTab') ||
+    errMsg.includes('user gesture') ||
+    errMsg.includes('gesture')
+  ) {
     return {
-      category: FailureTaxonomy.BROWSER_SPECIFIC_FAILURE,
-      userMessage: 'Extension store pages cannot be captured due to browser security policy.',
-      actionable: false
+      category: FailureTaxonomy.PERMISSION_ACTIVATION_FAILURE,
+      userMessage: 'Open this tab and enable WebAudioBalance from that tab before balancing it.',
+      actionable: true
     };
   }
 
@@ -85,25 +107,16 @@ export function classifyFailure(error, context = {}) {
     };
   }
 
-  // 4. Permission / User Activation
-  if (errMsg.includes('user gesture') || errMsg.includes('activeTab') || errMsg.includes('gesture')) {
-    return {
-      category: FailureTaxonomy.PERMISSION_ACTIVATION_FAILURE,
-      userMessage: 'Tab capture requires a direct user click on the extension or context menu.',
-      actionable: true
-    };
-  }
-
-  // 5. Capture failures
-  if (errMsg.includes('tabCapture') || errMsg.includes('getMediaStreamId') || errMsg.includes('Cannot capture')) {
+  // 4. Capture failures
+  if (errMsg.includes('tabCapture') || errMsg.includes('getMediaStreamId')) {
     return {
       category: FailureTaxonomy.CAPTURE_FAILURE,
-      userMessage: 'Failed to obtain audio capture stream from browser.',
+      userMessage: 'WebAudioBalance could not start audio processing for this tab.',
       actionable: true
     };
   }
 
-  // 6. Lifecycle failures
+  // 5. Lifecycle failures
   if (errMsg.includes('Tab was closed') || errMsg.includes('tab closed') || errMsg.includes('disconnected port')) {
     return {
       category: FailureTaxonomy.LIFECYCLE_FAILURE,
@@ -112,12 +125,29 @@ export function classifyFailure(error, context = {}) {
     };
   }
 
-  // 7. DSP failures
-  if (errMsg.includes('NaN') || errMsg.includes('Infinity') || errMsg.includes('AudioContext') || errMsg.includes('audio processing')) {
+  // 6. DSP failures
+  if (errMsg.includes('NaN') || errMsg.includes('Infinity') || errMsg.includes('audio processing anomaly')) {
     return {
       category: FailureTaxonomy.DSP_FAILURE,
       userMessage: 'Digital signal processing encountered an arithmetic anomaly.',
       actionable: false
+    };
+  }
+
+  // 7. Audio runtime start / engine failure (Section 5.5)
+  if (
+    errCode === ErrorCodes.AUDIO_ENGINE_START_FAILED ||
+    errCode === ErrorCodes.OFFSCREEN_UNAVAILABLE ||
+    errCode === ErrorCodes.AUDIO_ENGINE_NOT_FOUND ||
+    errCode === ErrorCodes.STREAM_ID_ACQUISITION_FAILED ||
+    errMsg.includes('AudioContext') ||
+    errMsg.includes('AudioEngine') ||
+    errMsg.includes('Offscreen')
+  ) {
+    return {
+      category: FailureTaxonomy.CAPTURE_FAILURE,
+      userMessage: 'WebAudioBalance could not start audio processing for this tab.',
+      actionable: true
     };
   }
 
@@ -132,7 +162,7 @@ export function classifyFailure(error, context = {}) {
 
   return {
     category: FailureTaxonomy.UNKNOWN,
-    userMessage: errMsg || 'An unexpected error occurred.',
+    userMessage: 'WebAudioBalance could not start audio processing for this tab.',
     actionable: false
   };
 }

@@ -9,6 +9,7 @@ import { MessageTargets, MessageTypes, createMessage, createCommandSuccess, crea
 import { ErrorCodes, createRuntimeError } from '../shared/failure-taxonomy.js';
 import { StructuredLogger, getBrowserInfo } from '../shared/logger.js';
 import { MultiTabCoordinator } from '../control/coordinator.js';
+import { checkUrlSupport } from '../popup/state-presenter.js';
 
 const logger = new StructuredLogger('ServiceWorker');
 const OFFSCREEN_DOCUMENT_PATH = 'src/offscreen/offscreen.html';
@@ -75,7 +76,26 @@ if (chrome.contextMenus && chrome.contextMenus.onClicked) {
     if (info.menuItemId === 'balance-tab-menu' && tab && tab.id) {
       logger.info('User activated capture via context menu', { tabId: tab.id });
       try {
-        await handleStartCapture(tab.id, null, { gestureSource: 'contextMenu' });
+        const urlCheck = checkUrlSupport(tab.url || '');
+        if (!urlCheck.supported) {
+          logger.warn('Context menu capture rejected: unsupported page', { tabId: tab.id, url: tab.url, reason: urlCheck.reason });
+          return;
+        }
+
+        let streamId = null;
+        try {
+          streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id });
+        } catch (streamErr) {
+          logger.error('tabCapture.getMediaStreamId failed in context menu gesture', { tabId: tab.id, error: streamErr.message });
+          return;
+        }
+
+        if (!streamId) {
+          logger.error('Empty stream ID acquired in context menu gesture', { tabId: tab.id });
+          return;
+        }
+
+        await handleStartCapture(tab.id, streamId, { gestureSource: 'contextMenu' });
       } catch (err) {
         logger.error('Failed to capture tab via context menu', { tabId: tab.id, error: err.message });
       }
@@ -84,51 +104,67 @@ if (chrome.contextMenus && chrome.contextMenus.onClicked) {
 }
 
 /**
- * Handle START_CAPTURE command with readiness barrier & error taxonomy (Section 9 & 14)
+ * Handle START_CAPTURE command with strict authorization check & transaction ordering (RA-1 & RA-2)
  */
 async function handleStartCapture(tabId, existingStreamId = null, options = {}) {
   await coordinatorReady;
-  // 1. Confirm managed intent in coordinator before attempting capture (Section 9.2)
-  coordinator.registry.setManaged(tabId, true);
-  if (typeof options.manualOffsetDb === 'number') {
-    coordinator.registry.updateTabSettings(tabId, { relativeOffsetDb: options.manualOffsetDb });
-  } else if (typeof options.relativeOffsetDb === 'number') {
-    coordinator.registry.updateTabSettings(tabId, { relativeOffsetDb: options.relativeOffsetDb });
-  }
-  if (typeof options.normalizationEnabled === 'boolean') {
-    coordinator.registry.updateTabSettings(tabId, { normalizationEnabled: options.normalizationEnabled });
-  }
-  await coordinator.seedTabMetadata(tabId);
 
+  // 1. Validate supported tab/page
+  let tabInfo = null;
   try {
-    logger.info('Initiating capture for tab', { tabId, hasExistingStreamId: Boolean(existingStreamId) });
+    tabInfo = await chrome.tabs.get(tabId);
+  } catch (_) {}
+  const tabUrl = tabInfo?.url || options.url || '';
+  const urlCheck = checkUrlSupport(tabUrl);
+  if (!urlCheck.supported) {
+    logger.warn('START_CAPTURE rejected: unsupported page', { tabId, url: tabUrl, reason: urlCheck.reason });
+    const err = createRuntimeError(
+      ErrorCodes.UNSUPPORTED_TAB,
+      urlCheck.reason || 'This browser page cannot be captured.',
+      { tabId, retryable: false }
+    );
+    // Ensure no stale managed state on failure
+    coordinator.registry.setManaged(tabId, false);
+    coordinator.registry.setCaptured(tabId, false, { lastRuntimeError: err });
+    return createCommandFailure(options.requestId, MessageTypes.START_CAPTURE, err, { tabId });
+  }
+
+  // 2. First-time capture requires an authorized streamId from valid user invocation
+  const streamId = existingStreamId;
+  if (!streamId) {
+    logger.warn('START_CAPTURE rejected: missing authorized stream ID', { tabId });
+    const authErr = createRuntimeError(
+      ErrorCodes.CAPTURE_AUTHORIZATION_REQUIRED,
+      'This tab must be opened and explicitly enabled before it can be balanced.',
+      { tabId, retryable: true }
+    );
+    // Crucial: Do not commit managed state before capture authorization succeeds
+    coordinator.registry.setManaged(tabId, false);
+    coordinator.registry.setCaptured(tabId, false, { lastRuntimeError: authErr });
+    return createCommandFailure(options.requestId, MessageTypes.START_CAPTURE, authErr, { tabId });
+  }
+
+  // 3. Ensure Offscreen document
+  try {
     await ensureOffscreenDocument();
+  } catch (offErr) {
+    logger.error('Failed to ensure offscreen document', { tabId, error: offErr.message });
+    const runtimeErr = createRuntimeError(
+      ErrorCodes.OFFSCREEN_UNAVAILABLE,
+      `Failed to reach Offscreen audio runtime: ${offErr.message}`,
+      { tabId, cause: offErr, retryable: true }
+    );
+    coordinator.registry.setManaged(tabId, false);
+    coordinator.registry.setCaptured(tabId, false, { lastRuntimeError: runtimeErr });
+    return createCommandFailure(options.requestId, MessageTypes.START_CAPTURE, runtimeErr, { tabId });
+  }
 
-    let streamId = existingStreamId;
-    if (!streamId) {
-      try {
-        streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId });
-      } catch (streamErr) {
-        throw createRuntimeError(
-          ErrorCodes.STREAM_ID_ACQUISITION_FAILED,
-          `tabCapture.getMediaStreamId failed: ${streamErr.message}`,
-          { tabId, cause: streamErr, retryable: true }
-        );
-      }
-    }
-
-    if (!streamId) {
-      throw createRuntimeError(
-        ErrorCodes.STREAM_ID_ACQUISITION_FAILED,
-        'tabCapture.getMediaStreamId returned empty stream ID',
-        { tabId, retryable: true }
-      );
-    }
-
+  // 4. Delegate to coordinator startManagingTab
+  try {
     const res = await coordinator.startManagingTab(tabId, streamId, options);
     return res;
   } catch (err) {
-    logger.error('handleStartCapture failed', { tabId, error: err.message || err });
+    logger.error('handleStartCapture exception', { tabId, error: err.message || err });
     const runtimeErr = err.code ? err : createRuntimeError(ErrorCodes.AUDIO_ENGINE_START_FAILED, err.message, { tabId, cause: err });
     coordinator.registry.setCaptured(tabId, false, { lastRuntimeError: runtimeErr });
     chrome.runtime.sendMessage(createMessage(MessageTypes.CAPTURE_ERROR, MessageTargets.POPUP, {

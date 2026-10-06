@@ -6,6 +6,7 @@ dist/*
 !dist/webaudiobalance-*.zip
 !dist/webaudiobalance-*.crx
 !dist/SHA256SUMS.txt
+!dist/RELEASE_NOTES_*.md
 build/
 coverage/
 

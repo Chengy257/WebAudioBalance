@@ -830,3 +830,78 @@ input[type="range"].volume-slider:focus-visible::-webkit-slider-thumb {
   color: var(--text-main);
 }
 
+/* RA-2: Current Tab, Switch to Tab, and Unsupported Page UI Styles */
+.btn-block {
+  width: 100%;
+}
+
+.btn-secondary {
+  background: var(--bg-card-secondary);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: #cbd5e1;
+}
+
+.current-tab-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.tab-action-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.tab-switch-hint {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.detected-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.unsupported-callout {
+  background: var(--bg-card-secondary);
+  border-left: 3px solid var(--warning);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.unsupported-title {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.unsupported-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.current-tab-badge {
+  font-size: 10px;
+  background: var(--primary-light);
+  color: var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 1px 5px;
+  font-weight: 600;
+}
+

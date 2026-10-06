@@ -4,6 +4,7 @@
  */
 
 import { MessageTargets, MessageTypes, createMessage } from '../shared/messages.js';
+import { ErrorCodes, createRuntimeError, classifyFailure } from '../shared/failure-taxonomy.js';
 import { StructuredLogger, getBrowserInfo, getStoredLogs, clearStoredLogs } from '../shared/logger.js';
 import { ListeningLevels, getListeningLevelByTarget, presentTabStatus, formatRelativeLevel, checkUrlSupport } from './state-presenter.js';
 
@@ -36,6 +37,7 @@ const btnDismissError = document.getElementById('btnDismissError');
 const btnGlobalAuto = document.getElementById('btnGlobalAuto');
 const levelButtons = document.querySelectorAll('.segment-btn');
 
+const currentTabContainer = document.getElementById('currentTabContainer');
 const managedCountBadge = document.getElementById('managedCountBadge');
 const managedTabsContainer = document.getElementById('managedTabsContainer');
 
@@ -178,13 +180,30 @@ async function queryCoordinatorSnapshot() {
  */
 async function refreshDetectedTabs() {
   try {
+    const urlParams = typeof window !== 'undefined' && window.location ? new URLSearchParams(window.location.search) : null;
+    const overrideTabId = urlParams?.get('tabId') ? Number(urlParams.get('tabId')) : null;
+
     const [audibleTabs, activeTabs] = await Promise.all([
       chrome.tabs.query({ audible: true }),
       chrome.tabs.query({ active: true, currentWindow: true })
     ]);
 
-    if (activeTabs && activeTabs.length > 0) {
+    if (overrideTabId) {
+      try {
+        activeTabInfo = await chrome.tabs.get(overrideTabId);
+      } catch (_) {
+        activeTabInfo = activeTabs?.[0] || null;
+      }
+    } else if (activeTabs && activeTabs.length > 0) {
       activeTabInfo = activeTabs[0];
+      // If popup was opened as a full tab in test/dev inspection, find the underlying target web tab
+      if (activeTabInfo?.url?.startsWith('chrome-extension://')) {
+        const windowTabs = await chrome.tabs.query({ currentWindow: true }).catch(() => []);
+        const targetWebTab = windowTabs.find((t) => t.id !== activeTabInfo.id && !t.url?.startsWith('chrome-extension://'));
+        if (targetWebTab) {
+          activeTabInfo = targetWebTab;
+        }
+      }
     }
 
     // Combine audible tabs and the current active tab
@@ -195,7 +214,7 @@ async function refreshDetectedTabs() {
     }
 
     detectedAudibleTabs = Array.from(tabMap.values());
-    renderDetectedTabs();
+    renderUI();
   } catch (err) {
     logger.warn('Failed to query browser tabs', { error: err.message });
   }
@@ -206,6 +225,7 @@ async function refreshDetectedTabs() {
  */
 function renderUI() {
   renderMasterControls();
+  renderCurrentTab();
   renderManagedTabs();
   renderDetectedTabs();
   renderDiagnosticsMetrics();
@@ -229,24 +249,137 @@ function renderMasterControls() {
 }
 
 /**
- * Render Managed Tabs Card Deck
+ * Render Current Active Tab section (RA-2)
+ */
+function renderCurrentTab() {
+  if (!currentTabContainer) return;
+
+  if (!activeTabInfo) {
+    currentTabContainer.innerHTML = `
+      <div class="empty-state">
+        <p>No active tab detected.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const isManaged = (currentSnapshot.managedTabs || []).some((t) => t.tabId === activeTabInfo.id);
+
+  if (isManaged) {
+    const managedTab = currentSnapshot.managedTabs.find((t) => t.tabId === activeTabInfo.id);
+    currentTabContainer.innerHTML = '';
+    const card = createManagedTabCard(managedTab, { isCurrentTab: true });
+    currentTabContainer.appendChild(card);
+    return;
+  }
+
+  // Current tab is unmanaged - check support
+  const urlCheck = checkUrlSupport(activeTabInfo.url);
+  currentTabContainer.innerHTML = '';
+
+  if (!urlCheck.supported) {
+    const card = document.createElement('div');
+    card.className = 'tab-card current-unsupported-card';
+    card.id = `current-card-${activeTabInfo.id}`;
+
+    const faviconHtml = activeTabInfo.favIconUrl
+      ? `<img class="tab-favicon" src="${escapeHtml(activeTabInfo.favIconUrl)}" alt="" onerror="this.replaceWith(document.createTextNode('🔒'))" />`
+      : `<span class="tab-favicon-fallback" aria-hidden="true">🔒</span>`;
+
+    card.innerHTML = `
+      <div class="tab-header">
+        <div class="tab-identity">
+          ${faviconHtml}
+          <div class="tab-title-group">
+            <div class="tab-title" title="${escapeHtml(activeTabInfo.title)}">${escapeHtml(activeTabInfo.title || 'Browser Page')}</div>
+            <div class="tab-url" title="${escapeHtml(activeTabInfo.url)}">${escapeHtml(formatDisplayUrl(activeTabInfo.url))}</div>
+          </div>
+        </div>
+        <span class="status-badge badge-muted">Unsupported</span>
+      </div>
+      <div class="unsupported-callout">
+        <span class="unsupported-title">This browser page cannot be captured.</span>
+        <span class="unsupported-desc">${escapeHtml(urlCheck.reason || 'Browser security restrictions prevent capturing this page.')}</span>
+      </div>
+    `;
+    currentTabContainer.appendChild(card);
+    return;
+  }
+
+  // Supported, unmanaged current tab
+  const card = document.createElement('div');
+  card.className = 'tab-card current-ready-card';
+  card.id = `current-card-${activeTabInfo.id}`;
+
+  const faviconHtml = activeTabInfo.favIconUrl
+    ? `<img class="tab-favicon" src="${escapeHtml(activeTabInfo.favIconUrl)}" alt="" onerror="this.replaceWith(document.createTextNode('🔊'))" />`
+    : `<span class="tab-favicon-fallback" aria-hidden="true">🔊</span>`;
+
+  card.innerHTML = `
+    <div class="tab-header">
+      <div class="tab-identity">
+        ${faviconHtml}
+        <div class="tab-title-group">
+          <div class="tab-title" title="${escapeHtml(activeTabInfo.title)}">${escapeHtml(activeTabInfo.title || 'Current Tab')}</div>
+          <div class="tab-url" title="${escapeHtml(activeTabInfo.url)}">${escapeHtml(formatDisplayUrl(activeTabInfo.url))}</div>
+        </div>
+      </div>
+      <span class="status-badge ${activeTabInfo.audible ? 'badge-info' : 'badge-muted'}">
+        ${activeTabInfo.audible ? 'Playing' : 'Ready'}
+      </span>
+    </div>
+    <div class="current-tab-actions">
+      <button class="btn btn-primary btn-block" id="btn-balance-${activeTabInfo.id}">
+        Balance This Tab
+      </button>
+      <span class="tab-action-hint">Click to start smart loudness normalization for this tab.</span>
+    </div>
+  `;
+
+  const btnBalance = card.querySelector(`#btn-balance-${activeTabInfo.id}`);
+  if (btnBalance) {
+    btnBalance.addEventListener('click', () => {
+      btnBalance.disabled = true;
+      btnBalance.textContent = 'Connecting...';
+      handleStartCapture(activeTabInfo.id);
+    });
+  }
+
+  currentTabContainer.appendChild(card);
+}
+
+/**
+ * Render Managed Tabs Card Deck (Balanced Tabs)
  */
 function renderManagedTabs() {
   const managedTabs = currentSnapshot.managedTabs || [];
   managedCountBadge.textContent = String(managedTabs.length);
 
+  // Tabs shown under Balanced Tabs are other balanced tabs (not activeTab if shown in Current Tab)
+  const otherManagedTabs = managedTabs.filter((t) => t.tabId !== activeTabInfo?.id);
+
   if (managedTabs.length === 0) {
     managedTabsContainer.innerHTML = `
       <div class="empty-state">
-        <p>No tabs currently under management.</p>
-        <p class="empty-hint">Select a detected tab below or right-click any page to balance its audio.</p>
+        <p>No tabs currently balanced.</p>
+        <p class="empty-hint">Use "Balance This Tab" above to balance the current tab.</p>
+      </div>
+    `;
+    return;
+  }
+
+  if (otherManagedTabs.length === 0) {
+    managedTabsContainer.innerHTML = `
+      <div class="empty-state">
+        <p>No other tabs currently balanced.</p>
+        <p class="empty-hint">Switch to another audio tab below to balance it too.</p>
       </div>
     `;
     return;
   }
 
   managedTabsContainer.innerHTML = '';
-  managedTabs.forEach((tab) => {
+  otherManagedTabs.forEach((tab) => {
     const card = createManagedTabCard(tab);
     managedTabsContainer.appendChild(card);
   });
@@ -255,7 +388,7 @@ function renderManagedTabs() {
 /**
  * Create DOM card for a managed tab
  */
-function createManagedTabCard(tab) {
+function createManagedTabCard(tab, options = {}) {
   const card = document.createElement('div');
   card.className = 'tab-card';
   card.id = `managed-card-${tab.tabId}`;
@@ -268,6 +401,8 @@ function createManagedTabCard(tab) {
     ? `<img class="tab-favicon" src="${escapeHtml(tab.favIconUrl)}" alt="" onerror="this.replaceWith(document.createTextNode('🔊'))" />`
     : `<span class="tab-favicon-fallback" aria-hidden="true">🔊</span>`;
 
+  const activePill = options.isCurrentTab ? `<span class="current-tab-badge">Active Tab</span>` : '';
+
   card.innerHTML = `
     <div class="tab-header">
       <div class="tab-identity">
@@ -277,7 +412,10 @@ function createManagedTabCard(tab) {
           <div class="tab-url" title="${escapeHtml(tab.url)}">${escapeHtml(formatDisplayUrl(tab.url))}</div>
         </div>
       </div>
-      <span class="status-badge ${status.badgeClass}" title="${escapeHtml(status.tooltip)}">${status.badgeText}</span>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        ${activePill}
+        <span class="status-badge ${status.badgeClass}" title="${escapeHtml(status.tooltip)}">${status.badgeText}</span>
+      </div>
     </div>
 
     <div class="tab-controls-block">
@@ -368,19 +506,18 @@ function createManagedTabCard(tab) {
 }
 
 /**
- * Render Detected / Audible Tabs Section
+ * Render Detected / Audible Tabs Section (Other Audio Tabs)
  */
 function renderDetectedTabs() {
   const managedTabIds = new Set((currentSnapshot.managedTabs || []).map((t) => t.tabId));
-  const unmanagedDetected = detectedAudibleTabs.filter((t) => !managedTabIds.has(t.id));
+  const unmanagedDetected = detectedAudibleTabs.filter((t) => !managedTabIds.has(t.id) && t.id !== activeTabInfo?.id);
 
   detectedCountBadge.textContent = String(unmanagedDetected.length);
 
   if (unmanagedDetected.length === 0) {
     detectedTabsContainer.innerHTML = `
       <div class="empty-state">
-        <p>No other audible tabs found.</p>
-        <p class="empty-hint">Tabs playing sound will automatically appear here.</p>
+        <p>No other audio tabs found.</p>
       </div>
     `;
     return;
@@ -394,41 +531,44 @@ function renderDetectedTabs() {
 }
 
 /**
- * Create DOM card for a detected tab
+ * Create DOM card for a background audio tab (RA-2)
  */
 function createDetectedTabCard(tab) {
   const card = document.createElement('div');
-  card.className = 'detected-card';
+  card.className = 'detected-card tab-card detected-card-row';
   card.id = `detected-card-${tab.id}`;
-
-  const urlCheck = checkUrlSupport(tab.url);
-  const isSupported = urlCheck.supported;
 
   const faviconHtml = tab.favIconUrl
     ? `<img class="tab-favicon" src="${escapeHtml(tab.favIconUrl)}" alt="" onerror="this.replaceWith(document.createTextNode('🎵'))" />`
     : `<span class="tab-favicon-fallback" aria-hidden="true">🎵</span>`;
 
   card.innerHTML = `
-    <div class="tab-identity">
-      ${faviconHtml}
-      <div class="tab-title-group">
-        <div class="tab-title" title="${escapeHtml(tab.title)}">${escapeHtml(tab.title || 'Untitled Tab')}</div>
-        <div class="tab-url" title="${escapeHtml(tab.url)}">
-          ${isSupported ? escapeHtml(formatDisplayUrl(tab.url)) : `<span class="unsupported-note">${escapeHtml(urlCheck.reason)}</span>`}
+    <div class="tab-header">
+      <div class="tab-identity">
+        ${faviconHtml}
+        <div class="tab-title-group">
+          <div class="tab-title" title="${escapeHtml(tab.title)}">${escapeHtml(tab.title || 'Untitled Tab')}</div>
+          <div class="tab-url" title="${escapeHtml(tab.url)}">${escapeHtml(formatDisplayUrl(tab.url))}</div>
         </div>
       </div>
+      <span class="status-badge badge-muted">Not enabled</span>
     </div>
-    <button class="btn btn-primary btn-sm" id="btn-balance-${tab.id}" ${!isSupported ? 'disabled title="Cannot capture this page"' : ''}>
-      Balance
-    </button>
+    <div class="detected-actions-row">
+      <button class="btn btn-secondary btn-sm" id="btn-switch-${tab.id}">
+        Switch to Tab
+      </button>
+      <span class="tab-switch-hint">Enable WebAudioBalance after switching to this tab.</span>
+    </div>
   `;
 
-  if (isSupported) {
-    const btnBalance = card.querySelector(`#btn-balance-${tab.id}`);
-    btnBalance.addEventListener('click', () => {
-      btnBalance.disabled = true;
-      btnBalance.textContent = 'Connecting...';
-      handleStartCapture(tab.id);
+  const btnSwitch = card.querySelector(`#btn-switch-${tab.id}`);
+  if (btnSwitch) {
+    btnSwitch.addEventListener('click', () => {
+      chrome.tabs.update(tab.id, { active: true }, () => {
+        if (typeof window !== 'undefined' && window.close) {
+          window.close();
+        }
+      });
     });
   }
 
@@ -436,10 +576,34 @@ function createDetectedTabCard(tab) {
 }
 
 /**
- * Capture invocation
+ * Capture invocation with user authorization check & error classification (RA-1 & RA-2)
  */
 async function handleStartCapture(tabId) {
-  logger.info('Initiating tab balance from popup', { tabId });
+  logger.info('Initiating tab balance from popup', { tabId, activeTabId: activeTabInfo?.id });
+  hideError();
+
+  // RA-1: A tab may enter first-time capture only when extension has valid user invocation on target tab
+  if (activeTabInfo && tabId !== activeTabInfo.id) {
+    const msg = 'Open this tab and enable WebAudioBalance from that tab before balancing it.';
+    logger.warn('Attempted remote first-time balance on background tab', { tabId, activeTabId: activeTabInfo.id });
+    showError(msg);
+    return;
+  }
+
+  const url = activeTabInfo?.url || '';
+  const urlCheck = checkUrlSupport(url);
+  if (!urlCheck.supported) {
+    const msg = 'This browser page cannot be captured.';
+    logger.warn('Attempted capture on unsupported page', { tabId, url, reason: urlCheck.reason });
+    showError(msg);
+    return;
+  }
+
+  const btnBalance = document.getElementById(`btn-balance-${tabId}`);
+  if (btnBalance) {
+    btnBalance.disabled = true;
+    btnBalance.textContent = 'Connecting...';
+  }
 
   try {
     let streamId = null;
@@ -457,7 +621,14 @@ async function handleStartCapture(tabId) {
       });
       logger.info('Acquired stream ID under popup gesture', { tabId, streamIdPresent: Boolean(streamId) });
     } catch (gestureErr) {
-      logger.warn('Could not acquire stream ID directly in popup, delegating to SW', { error: gestureErr.message });
+      logger.error('Could not acquire stream ID directly in popup gesture', { error: gestureErr.message });
+      const failure = classifyFailure(gestureErr, { tabId, url });
+      showError(failure.userMessage);
+      if (btnBalance) {
+        btnBalance.disabled = false;
+        btnBalance.textContent = 'Balance This Tab';
+      }
+      return;
     }
 
     const response = await chrome.runtime.sendMessage(createMessage(
@@ -470,13 +641,15 @@ async function handleStartCapture(tabId) {
       logger.info('Start capture successfully processed', { tabId });
       hideError();
     } else {
-      const errMsg = response?.error?.message || (typeof response?.error === 'string' ? response.error : 'Unknown error');
+      const runtimeErr = response?.error;
+      const failure = classifyFailure(runtimeErr, { tabId, url });
       logger.error('Start capture returned error', response);
-      showError(`Could not balance tab: ${errMsg}`);
+      showError(failure.userMessage);
     }
   } catch (err) {
     logger.error('handleStartCapture exception', { error: err.message });
-    showError(`Balance tab failed: ${err.message}`);
+    const failure = classifyFailure(err, { tabId, url });
+    showError(failure.userMessage);
   } finally {
     setTimeout(refreshAll, 300);
   }

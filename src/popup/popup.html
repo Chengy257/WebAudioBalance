@@ -33,7 +33,7 @@
       <div class="master-row">
         <div class="master-label-group">
           <span class="master-label">Auto Balance</span>
-          <span class="master-desc">Applies to enabled tabs</span>
+          <span class="master-desc">Applies to balanced tabs</span>
         </div>
         <button id="btnGlobalAuto" class="switch" role="switch" aria-checked="true" aria-label="Toggle auto balance">
           <span class="switch-handle"></span>
@@ -59,22 +59,32 @@
       </div>
     </section>
 
-    <!-- Enabled Tabs Section (Section 5) -->
-    <section class="section" aria-label="Enabled Tabs">
+    <!-- Current Tab Section (RA-2) -->
+    <section class="section" id="currentTabSection" aria-label="Current Tab">
       <div class="section-header">
-        <h2 class="section-title">Enabled Tabs</h2>
+        <h2 class="section-title">Current Tab</h2>
+      </div>
+      <div id="currentTabContainer" class="tabs-deck">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- Balanced Tabs Section (Managed Tabs) -->
+    <section class="section" id="managedTabsSection" aria-label="Balanced Tabs">
+      <div class="section-header">
+        <h2 class="section-title">Balanced Tabs</h2>
         <span id="managedCountBadge" class="count-badge">0</span>
       </div>
       <div id="managedTabsContainer" class="tabs-deck">
         <div class="empty-state">
           <p>No tabs currently balanced.</p>
-          <p class="empty-hint">Select a detected tab below or right-click any page to balance its audio.</p>
+          <p class="empty-hint">Use "Balance This Tab" above to balance the current tab.</p>
         </div>
       </div>
     </section>
 
-    <!-- Other Audio Tabs Section (Section 8) -->
-    <section class="section" aria-label="Other Audio Tabs">
+    <!-- Other Audio Tabs Section (Detected Tabs) -->
+    <section class="section" id="detectedTabsSection" aria-label="Other Audio Tabs">
       <div class="section-header">
         <h2 class="section-title">Other Audio Tabs</h2>
         <span id="detectedCountBadge" class="count-badge">0</span>

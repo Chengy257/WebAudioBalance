@@ -101,6 +101,17 @@ export class MultiTabCoordinator {
     await this.init();
     logger.info('Starting management transaction for tab', { tabId, hasStreamId: Boolean(streamId) });
 
+    if (!streamId) {
+      const authErr = createRuntimeError(
+        ErrorCodes.CAPTURE_AUTHORIZATION_REQUIRED,
+        'This tab must be opened and explicitly enabled before it can be balanced.',
+        { tabId, retryable: true }
+      );
+      this.registry.setManaged(tabId, false);
+      this.registry.setCaptured(tabId, false, { lastRuntimeError: authErr });
+      return createCommandFailure(options.requestId, MessageTypes.START_CAPTURE, authErr, { tabId });
+    }
+
     // 1. Seed tab metadata
     await this.seedTabMetadata(tabId);
 

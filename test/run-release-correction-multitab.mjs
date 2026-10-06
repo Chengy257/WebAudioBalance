@@ -249,58 +249,66 @@ async function testBrowserSimultaneousMultiTab(browser, portOffset) {
     console.log('Started continuous audio tone on Tab B (880 Hz)');
     await sleep(600);
 
-    // Open Extension Popup
-    const popupUrl = `chrome-extension://${extensionId}/src/popup/popup.html`;
-    const popupTargetRes = await browserCdp.send('Target.createTarget', { url: popupUrl });
-    const popupTargetId = popupTargetRes.result?.targetId || popupTargetRes.targetId;
+    // Attach to Service Worker
+    const swCdp = new CdpConnection(swTarget.webSocketDebuggerUrl);
+    await swCdp.connect();
+    await swCdp.send('Runtime.enable');
+
+    // Query browser tabs to get Tab A and Tab B IDs
+    const tabsList = await swCdp.evaluate(`
+      new Promise((resolve) => {
+        chrome.tabs.query({}, (tabs) => resolve(tabs.map(t => ({ id: t.id, url: t.url, active: t.active }))));
+      })
+    `);
+    const tabAId = tabsList.find((t) => t.url && t.url.includes('source=tabA'))?.id;
+    const tabBId = tabsList.find((t) => t.url && t.url.includes('source=tabB'))?.id;
+    console.log(`Discovered Tab IDs: Tab A = ${tabAId}, Tab B = ${tabBId}`);
+    if (!tabAId || !tabBId) {
+      throw new Error(`Failed to find both Tab A and Tab B in browser tabs`);
+    }
+
+    // --- STEP 1: Activate Tab A, Open Popup, Enable Tab A (Section 7.2) ---
+    console.log(`\n--- Step 1: Activate Tab A (${tabAId}) & Balance Tab A ---`);
+    await swCdp.evaluate(`chrome.tabs.update(${tabAId}, { active: true })`);
     await sleep(600);
 
-    let popupTarget = null;
-    const allTargetsNow = await (await fetch(`http://127.0.0.1:${cdpPort}/json`)).json();
-    popupTarget = allTargetsNow.find((t) => (t.id === popupTargetId || t.url.includes('popup.html')) && t.webSocketDebuggerUrl);
-    if (!popupTarget) throw new Error('Could not attach to Popup target');
+    const popupUrl = `chrome-extension://${extensionId}/src/popup/popup.html`;
+    const popupUrlA = `${popupUrl}?tabId=${tabAId}`;
+    const popupTargetResA = await browserCdp.send('Target.createTarget', { url: popupUrlA });
+    const popupTargetIdA = popupTargetResA.result?.targetId || popupTargetResA.targetId;
+    await sleep(600);
 
-    const popupCdp = new CdpConnection(popupTarget.webSocketDebuggerUrl);
+    let popupTargetA = null;
+    const targetsAfterA = await (await fetch(`http://127.0.0.1:${cdpPort}/json`)).json();
+    popupTargetA = targetsAfterA.find((t) => (t.id === popupTargetIdA || t.url.includes('popup.html')) && t.webSocketDebuggerUrl);
+    if (!popupTargetA) throw new Error('Could not attach to Popup target for Tab A');
+
+    let popupCdp = new CdpConnection(popupTargetA.webSocketDebuggerUrl);
     await popupCdp.connect();
     await popupCdp.send('Runtime.enable');
 
-    // Wait until popup is ready
     for (let i = 0; i < 25; i++) {
       await sleep(200);
       const ready = await popupCdp.evaluate('Boolean(window.chrome && window.chrome.tabs && window.chrome.tabs.query)');
       if (ready) break;
     }
-
-    // Refresh popup to detect tabs
     await popupCdp.evaluate('document.getElementById("btnRefresh")?.click()');
     await sleep(600);
 
-    // Discover both tabs in popup
-    const detected = await popupCdp.evaluate(`
+    // Click balance on Tab A
+    const clickRes = await popupCdp.evaluate(`
       (() => {
-        const cards = Array.from(document.querySelectorAll('.detected-card'));
-        return cards.map(c => ({
-          cardId: c.id,
-          tabId: Number(c.id.replace('detected-card-', '')),
-          title: c.querySelector('.tab-title')?.textContent,
-          url: c.querySelector('.tab-url')?.textContent
-        }));
+        const btn = document.getElementById("btn-balance-${tabAId}");
+        if (!btn) return { clicked: false, currentContainer: document.getElementById('currentTabContainer')?.innerHTML };
+        btn.click();
+        return { clicked: true, text: btn.textContent };
       })()
     `);
-
-    console.log(`Discovered detected tabs in popup:`, detected);
-    if (detected.length < 2) {
-      throw new Error(`Expected at least 2 detected tabs, found ${detected.length}`);
-    }
-
-    const tabAId = detected.find((d) => d.url.includes('source=tabA'))?.tabId || detected[0].tabId;
-    const tabBId = detected.find((d) => d.url.includes('source=tabB'))?.tabId || detected[1].tabId;
-
-    console.log(`Target Tab IDs: Tab A = ${tabAId}, Tab B = ${tabBId}`);
-
-    // --- STEP 1: Enable / Balance Tab A ---
-    console.log(`\n--- Step 1: Enable Tab A (${tabAId}) ---`);
-    await popupCdp.evaluate(`document.getElementById("btn-balance-${tabAId}")?.click()`);
+    console.log('Click on btn-balance Tab A result:', clickRes);
+    await sleep(1000);
+    const errText = await popupCdp.evaluate(`document.getElementById('errorMessage')?.textContent`);
+    console.log('Popup errorMessage after click:', errText);
+    console.log('Popup console logs:', popupCdp.consoleLogs);
 
     // Wait until Tab A is running
     let tabARunning = false;
@@ -308,7 +316,9 @@ async function testBrowserSimultaneousMultiTab(browser, portOffset) {
       await sleep(300);
       const snap = await popupCdp.evaluate(`
         (async () => {
-          return await chrome.runtime.sendMessage({ type: 'GET_PRODUCT_SNAPSHOT', target: 'service_worker' });
+          return await new Promise((resolve) => {
+            chrome.runtime.sendMessage({ type: 'GET_PRODUCT_SNAPSHOT', target: 'service_worker' }, (res) => resolve(res));
+          });
         })()
       `);
       const tabA = snap?.managedTabs?.find((t) => t.tabId === tabAId);
@@ -323,24 +333,37 @@ async function testBrowserSimultaneousMultiTab(browser, portOffset) {
       throw new Error(`Tab A failed to start and reach RUNNING state`);
     }
 
-    // Query browser tabCapture state for Tab A
-    const browserCaptureA = await popupCdp.evaluate(`
-      new Promise((resolve) => {
-        chrome.tabCapture.getCapturedTabs((tabs) => resolve(tabs));
-      })
-    `);
-    console.log(`  Browser chrome.tabCapture.getCapturedTabs after Tab A started:`, browserCaptureA);
+    // Close Tab A popup before switching
+    popupCdp.close();
+    await browserCdp.send('Target.closeTarget', { targetId: popupTargetIdA });
+    await sleep(600);
 
-    // Query offscreen runtime snapshot
-    const offscreenSnapA = await popupCdp.evaluate(`
-      (async () => {
-        return await chrome.runtime.sendMessage({ type: 'GET_AUDIO_RUNTIME_SNAPSHOT', target: 'offscreen' });
-      })()
-    `);
-    console.log(`  Offscreen engines count after Tab A: ${offscreenSnapA?.engines?.length}`);
+    // --- STEP 2: Activate Tab B, Open Popup, Enable Tab B (Section 7.2) ---
+    console.log(`\n--- Step 2: Activate Tab B (${tabBId}) & Balance Tab B (without stopping Tab A) ---`);
+    await swCdp.evaluate(`chrome.tabs.update(${tabBId}, { active: true })`);
+    await sleep(600);
 
-    // --- STEP 2: Without stopping Tab A, Enable / Balance Tab B ---
-    console.log(`\n--- Step 2: Without stopping Tab A, Enable Tab B (${tabBId}) ---`);
+    const popupUrlB = `${popupUrl}?tabId=${tabBId}`;
+    const popupTargetResB = await browserCdp.send('Target.createTarget', { url: popupUrlB });
+    const popupTargetIdB = popupTargetResB.result?.targetId || popupTargetResB.targetId;
+    await sleep(600);
+
+    let popupTargetB = null;
+    const targetsAfterBNow = await (await fetch(`http://127.0.0.1:${cdpPort}/json`)).json();
+    popupTargetB = targetsAfterBNow.find((t) => (t.id === popupTargetIdB || t.url.includes('popup.html')) && t.webSocketDebuggerUrl);
+    if (!popupTargetB) throw new Error('Could not attach to Popup target for Tab B');
+
+    popupCdp = new CdpConnection(popupTargetB.webSocketDebuggerUrl);
+    await popupCdp.connect();
+    await popupCdp.send('Runtime.enable');
+
+    for (let i = 0; i < 25; i++) {
+      await sleep(200);
+      const ready = await popupCdp.evaluate('Boolean(window.chrome && window.chrome.tabs && window.chrome.tabs.query)');
+      if (ready) break;
+    }
+    await popupCdp.evaluate('document.getElementById("btnRefresh")?.click()');
+    await sleep(600);
 
     // Click balance on Tab B
     const balanceBClicked = await popupCdp.evaluate(`
@@ -352,11 +375,9 @@ async function testBrowserSimultaneousMultiTab(browser, portOffset) {
       })()
     `);
     console.log(`  Clicked Balance on Tab B: ${balanceBClicked}`);
-
-    // Give browser and runtime up to 4 seconds to execute Tab B capture transaction
     await sleep(2500);
 
-    // --- STEP 3: Inspect browser and runtime states ---
+    // --- STEP 3: Inspect simultaneous state ---
     console.log(`\n--- Step 3: Inspect simultaneous state ---`);
 
     // Query browser tabCapture

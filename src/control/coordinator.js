@@ -575,12 +575,24 @@ export class MultiTabCoordinator {
         // Corroboration diagnostic check (Section 12.2)
         const tabCaptureRecord = capturedTabsList.find(c => c.tabId === tabId);
         if (tabCaptureRecord && (tabCaptureRecord.status === 'stopped' || tabCaptureRecord.status === 'error')) {
-          logger.warn(`Capture mismatch: Live engine exists for tab ${tabId} but tabCapture reports status ${tabCaptureRecord.status}`);
-          regTab.runtime.lastRuntimeError = createRuntimeError(
-            ErrorCodes.CAPTURE_STATE_MISMATCH,
-            `Audio engine running but browser tabCapture reports ${tabCaptureRecord.status}`,
-            { tabId, retryable: true }
-          );
+          if (liveEngine.engineState === 'RUNNING' && liveEngine.audioContextState === 'running') {
+            // Live engine is confirmed running and healthy in the Offscreen audio runtime.
+            // Offscreen AudioContext is the authoritative source of truth.
+            if (regTab.runtime.lastRuntimeError?.code === ErrorCodes.CAPTURE_STATE_MISMATCH) {
+              regTab.runtime.lastRuntimeError = null;
+            }
+          } else {
+            logger.warn(`Capture mismatch: Live engine exists for tab ${tabId} but tabCapture reports status ${tabCaptureRecord.status}`);
+            regTab.runtime.lastRuntimeError = createRuntimeError(
+              ErrorCodes.CAPTURE_STATE_MISMATCH,
+              `Audio engine running but browser tabCapture reports ${tabCaptureRecord.status}`,
+              { tabId, retryable: true }
+            );
+          }
+        } else if (liveEngine.engineState === 'RUNNING') {
+          if (regTab.runtime.lastRuntimeError?.code === ErrorCodes.CAPTURE_STATE_MISMATCH) {
+            regTab.runtime.lastRuntimeError = null;
+          }
         }
       } else {
         // No live engine exists for this tab

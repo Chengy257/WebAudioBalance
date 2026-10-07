@@ -74,7 +74,7 @@ WebAudioBalance v1.1.1 is an audited corrective release that rectifies the first
 ### Release Artifact Integrity (SHA-256)
 
 ```text
-f0b9126e01d1a47a455d33d56bdc1ad9011334a4fee890e465b590fd9b9451eb  webaudiobalance-v1.1.1.crx
-eeea286b4ef1a4b3677698d35bf4e6946db7f7de5af8863eaeb6721421b22c5c  webaudiobalance-v1.1.1.pem
-bd0ec86dbcd4666a13f439ec3e8eadfd3bd64bd04598d4bb6973a5fdd350c846  webaudiobalance-v1.1.1.zip
+7c438ba5484e59b5aa6b01017aa395d78e3a7630a375366534921203d151bcdb  webaudiobalance-v1.1.1.crx
+c984e2308ecfc0aea6e9e3c8692b07ba5e4eef09f52f9162aca41dcca12750e2  webaudiobalance-v1.1.1.pem
+9cab156526a35db882079815bda3c5de355081fa30ba1a268652d7f775926efd  webaudiobalance-v1.1.1.zip
 ```

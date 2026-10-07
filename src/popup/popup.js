@@ -80,17 +80,34 @@ async function init() {
  * Setup static DOM listeners
  */
 function setupEventListeners() {
-  btnRefresh.addEventListener('click', () => refreshAll());
+  btnRefresh.addEventListener('click', async () => {
+    btnRefresh.classList.add('spinning');
+    setTimeout(() => btnRefresh.classList.remove('spinning'), 600);
+    try {
+      // Trigger active self-healing reconciliation across runtime
+      await chrome.runtime.sendMessage(createMessage(
+        MessageTypes.RECONCILE_RUNTIME,
+        MessageTargets.SERVICE_WORKER,
+        { reason: 'user_refresh_button' }
+      ));
+    } catch (_) {}
+    await refreshAll();
+  });
 
   btnToggleDiagnostics.addEventListener('click', () => {
     if (diagnosticsDrawer) {
       diagnosticsDrawer.open = !diagnosticsDrawer.open;
-      if (diagnosticsDrawer.open) renderDiagnosticsMetrics();
+      btnToggleDiagnostics.classList.toggle('active', diagnosticsDrawer.open);
+      if (diagnosticsDrawer.open) {
+        renderDiagnosticsMetrics();
+        diagnosticsDrawer.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }
     }
   });
 
   if (diagnosticsDrawer) {
     diagnosticsDrawer.addEventListener('toggle', () => {
+      btnToggleDiagnostics.classList.toggle('active', diagnosticsDrawer.open);
       if (diagnosticsDrawer.open) renderDiagnosticsMetrics();
     });
   }

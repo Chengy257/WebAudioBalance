@@ -71,13 +71,17 @@ if (browserExe) {
   fs.writeFileSync(stagedManifestPath, JSON.stringify(manifestData, null, 2));
 
   try {
-    execFileSync(browserExe, [`--pack-extension=${UNPACKED_DIR}`]);
+    const targetCrx = path.join(DIST_DIR, `webaudiobalance-v${VERSION}.crx`);
+    const targetPem = path.join(DIST_DIR, `webaudiobalance-v${VERSION}.pem`);
+
+    const packArgs = [`--pack-extension=${UNPACKED_DIR}`];
+    if (fs.existsSync(targetPem)) {
+      packArgs.push(`--pack-extension-key=${targetPem}`);
+    }
+    execFileSync(browserExe, packArgs);
 
     const generatedCrx = path.join(DIST_DIR, 'unpacked.crx');
     const generatedPem = path.join(DIST_DIR, 'unpacked.pem');
-
-    const targetCrx = path.join(DIST_DIR, `webaudiobalance-v${VERSION}.crx`);
-    const targetPem = path.join(DIST_DIR, `webaudiobalance-v${VERSION}.pem`);
 
     if (fs.existsSync(generatedCrx)) {
       fs.renameSync(generatedCrx, targetCrx);

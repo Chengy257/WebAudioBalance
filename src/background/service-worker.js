@@ -263,6 +263,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         .catch((err) => sendResponse(createCommandFailure(requestId, type, err)));
       return true;
 
+    case MessageTypes.RECONCILE_RUNTIME:
+      coordinatorReady
+        .then(() => coordinator.reconcileRuntime(payload?.reason || 'user_refresh'))
+        .then((snapshot) => sendResponse(createCommandSuccess(requestId, type, { snapshot })))
+        .catch((err) => sendResponse(createCommandFailure(requestId, type, err)));
+      return true;
+
     // Disambiguated Query: GET_PRODUCT_SNAPSHOT (Section 3.3 & Section 6)
     case MessageTypes.GET_PRODUCT_SNAPSHOT:
     case MessageTypes.GET_COORDINATOR_SNAPSHOT:

@@ -204,14 +204,16 @@ export class LoudnessCore {
    * Reset epoch upon activity resume to avoid contaminating short-term window with preceding silence
    */
   resetEpoch() {
-    this.slices = [];
-    this.totalSlicesProcessed = 0;
+    // Retain active speech slices (> -70 LUFS) to preserve conversational continuity
+    // while discarding true silence frames that would corrupt loudness integration
+    this.slices = this.slices.filter((s) => s.energy > 1e-7);
+    this.totalSlicesProcessed = this.slices.length;
     this.currentSliceFrames = 0;
     this.currentSliceChannelSquares.fill(0);
     this.currentSlicePeak = 0.0;
     if (this.lastMeasurement) {
-      this.lastMeasurement.momentaryValid = false;
-      this.lastMeasurement.shortTermValid = false;
+      this.lastMeasurement.momentaryValid = this.totalSlicesProcessed >= this.momentarySlicesCount;
+      this.lastMeasurement.shortTermValid = this.totalSlicesProcessed >= this.maxSlices;
     }
   }
 

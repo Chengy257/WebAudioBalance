@@ -6,7 +6,7 @@
 export class ActivityDetector {
   constructor(options = {}) {
     this.silenceThresholdLufs = options.silenceThresholdLufs ?? -50.0;
-    this.holdTimeMs = options.holdTimeMs ?? 600; // Hold active state briefly during micro speech pauses
+    this.holdTimeMs = options.holdTimeMs ?? 1500; // Hold active state through natural conversational pauses
 
     this.isActive = false;
     this.lastActiveTime = 0;

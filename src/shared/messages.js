@@ -32,6 +32,7 @@ export const MessageTypes = Object.freeze({
   GET_AUDIO_RUNTIME_SNAPSHOT: 'GET_AUDIO_RUNTIME_SNAPSHOT', // Offscreen live engine truth
   GET_COORDINATOR_SNAPSHOT: 'GET_COORDINATOR_SNAPSHOT', // Deprecated alias for GET_PRODUCT_SNAPSHOT
   QUERY_RUNTIME_STATE: 'QUERY_RUNTIME_STATE',           // Deprecated compatibility alias
+  RECONCILE_RUNTIME: 'RECONCILE_RUNTIME',               // Active state reconciliation & self-healing query
 
   // Disambiguated Events (Section 3.4)
   AUDIO_RUNTIME_READY: 'AUDIO_RUNTIME_READY',

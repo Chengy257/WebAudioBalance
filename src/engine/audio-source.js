@@ -62,19 +62,7 @@ export class TabCaptureAudioSource extends BaseAudioSource {
           chromeMediaSource: 'tab',
           chromeMediaSourceId: this.streamId
         }
-      },
-      video: {
-        mandatory: {
-          chromeMediaSource: 'tab',
-          chromeMediaSourceId: this.streamId
-        }
       }
-    });
-
-    // Immediately stop redundant video track to free graphics compositor resources
-    const videoTracks = stream.getVideoTracks();
-    videoTracks.forEach((t) => {
-      try { t.stop(); } catch (_) {}
     });
 
     const audioTracks = stream.getAudioTracks();

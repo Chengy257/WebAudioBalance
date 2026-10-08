@@ -8,7 +8,7 @@
 [![Version](https://img.shields.io/badge/Version-v1.1.1-brightgreen)](dist/RELEASE_NOTES_v1.1.1.md)
 [![Tests](https://img.shields.io/badge/Tests-137%2F137%20Passed-success)](#verification--testing)
 [![DSP Standard](https://img.shields.io/badge/DSP-ITU--R%20BS.1770--5-orange)](#audio-processing-specifications)
-[![License](https://img.shields.io/badge/License-UNLICENSED-lightgrey)](#license)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Language: 简体中文](https://img.shields.io/badge/Language-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](README_zh.md)
 
 [English](README.md) | [简体中文](README_zh.md)
@@ -260,4 +260,4 @@ WebAudioBalance is engineered with a strict **privacy-first** approach:
 
 ## 10. License
 
-All rights reserved. License terms to be determined by the project owner.
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

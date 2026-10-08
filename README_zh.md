@@ -8,6 +8,7 @@
 [![Version](https://img.shields.io/badge/版本-v1.1.1-brightgreen)](dist/RELEASE_NOTES_v1.1.1.md)
 [![Tests](https://img.shields.io/badge/测试-137%2F137%20通过-success)](#验证与测试)
 [![DSP Standard](https://img.shields.io/badge/DSP%20标准-ITU--R%20BS.1770--5-orange)](#音频处理算法技术规格)
+[![License](https://img.shields.io/badge/开源协议-Apache_2.0-blue.svg)](LICENSE)
 [![Language: English](https://img.shields.io/badge/Language-English-blue)](README.md)
 
 [English](README.md) | [简体中文](README_zh.md)
@@ -254,6 +255,6 @@ WebAudioBalance 严格坚持**本地优先与隐私第一**的工程设计原则
 
 ---
 
-## 10. 许可证 (License)
+## 10. 开源协议 (License)
 
-保留所有权利。最终分发许可证由项目所有者确定。
+本项目基于 [Apache License 2.0](LICENSE) 协议开源，详情请参阅项目根目录下的 LICENSE 文件。
